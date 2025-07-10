@@ -1,69 +1,305 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
+import os
+import json
+import time
+from werkzeug.utils import secure_filename
+from ai_processor import PoseAnalyzer, FormAnalyzer, LLMFeedbackGenerator
+from config import get_config, validate_config, print_config_summary
+
+# Import models and db instance
+from models import db, User, Exercise, Session, PoseLandmarks, Feedback
+
+# Get configuration
+config = get_config()
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///apt.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
-CORS(app)  # Enable CORS for mobile app integration
+app.config["SQLALCHEMY_DATABASE_URI"] = config.database.uri
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.database.track_modifications
+app.config['MAX_CONTENT_LENGTH'] = config.video.max_size_mb * 1024 * 1024
+app.config['SECRET_KEY'] = config.security.secret_key
 
-# Database Models
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship to sessions
-    sessions = db.relationship('Session', backref='user', lazy=True)
+# Initialize the db with the app (this was missing!)
+db.init_app(app)
 
-class Exercise(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)              # "Lat Pull-Down"
-    primary_muscle = db.Column(db.String(80), nullable=False)    # "Lats"
-    description = db.Column(db.Text)                             # Optional exercise description
-    
-    # Relationship to sessions
-    sessions = db.relationship('Session', backref='exercise', lazy=True)
+# Create upload directories
+os.makedirs(config.video.upload_folder, exist_ok=True)
+os.makedirs(config.video.pose_data_folder, exist_ok=True)
 
-class Session(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    exercise_id = db.Column(db.Integer, db.ForeignKey("exercise.id"), nullable=False)
-    performed_at = db.Column(db.DateTime, default=datetime.utcnow)
-    video_path = db.Column(db.String(200))                       # local or S3 URL
-    status = db.Column(db.String(20), default="pending")         # "pending", "processing", "processed"
-    rep_count = db.Column(db.Integer)                            # Detected rep count
-    duration_seconds = db.Column(db.Float)                       # Session duration
-    
-    # Relationship to feedback
-    feedback = db.relationship('Feedback', backref='session', lazy=True)
+CORS(app, origins=config.security.cors_origins.split(',') if config.security.cors_origins != '*' else '*')
 
-class Feedback(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey("session.id"), nullable=False)
-    summary = db.Column(db.Text, nullable=False)                 # "Back is arching; drop load 10%"
-    form_score = db.Column(db.Float)                             # 0.0 - 1.0 form quality score
-    injury_risk_level = db.Column(db.String(20))                 # "low", "medium", "high"
-    recommendations = db.Column(db.Text)                         # Specific improvement suggestions
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+# Validate configuration
+if not validate_config():
+    print("❌ Configuration validation failed!")
+    exit(1)
 
-# Initialize database
+print_config_summary()
+
+# Initialize AI components
+pose_analyzer = PoseAnalyzer()
+form_analyzer = FormAnalyzer()
+
+# Initialize LLM generator based on provider
+if config.ai.provider == "kolosal":
+    llm_generator = LLMFeedbackGenerator(
+        provider="kolosal",
+        kolosal_url=config.ai.kolosal_url
+    )
+elif config.ai.provider == "openai":
+    llm_generator = LLMFeedbackGenerator(
+        api_key=config.ai.openai_key,
+        provider="openai"
+    )
+elif config.ai.provider == "anthropic":
+    llm_generator = LLMFeedbackGenerator(
+        api_key=config.ai.anthropic_key,
+        provider="anthropic"
+    )
+else:
+    raise ValueError(f"Unsupported LLM provider: {config.ai.provider}")
+
+print(f"🤖 Using LLM Provider: {config.ai.provider}")
+
 def init_db():
     """Create all database tables"""
     with app.app_context():
         db.create_all()
         print("Database tables created successfully!")
 
-# Basic route to test the server
-@app.route('/')
-def hello():
-    return jsonify({"message": "APT API is running!", "version": "0.1"})
+def allowed_file(filename):
+    """Check if uploaded file is allowed"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in [f.strip('.') for f in config.video.supported_formats]
 
 # ============================================================================
-# USER CRUD ROUTES
+# VIDEO UPLOAD AND AI PROCESSING ROUTES
+# ============================================================================
+
+@app.route("/upload-video", methods=["POST"])
+def upload_video():
+    """Upload video file for AI analysis"""
+    
+    if 'video' not in request.files:
+        return jsonify({"error": "No video file provided"}), 400
+    
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({"error": "No video file selected"}), 400
+    
+    if not allowed_file(file.filename):
+        return jsonify({"error": f"File type not supported. Use: {config.video.supported_formats}"}), 400
+    
+    # Get form data
+    user_id = request.form.get('user_id', type=int)
+    exercise_id = request.form.get('exercise_id', type=int)
+    
+    if not user_id or not exercise_id:
+        return jsonify({"error": "user_id and exercise_id are required"}), 400
+    
+    # Verify user and exercise exist
+    user = User.query.get(user_id)
+    exercise = Exercise.query.get(exercise_id)
+    if not user or not exercise:
+        return jsonify({"error": "Invalid user_id or exercise_id"}), 404
+    
+    # Save file
+    filename = secure_filename(file.filename)
+    timestamp = int(time.time())
+    unique_filename = f"{timestamp}_{filename}"
+    video_path = os.path.join(config.video.upload_folder, unique_filename)
+    
+    try:
+        file.save(video_path)
+        file_size = os.path.getsize(video_path)
+        
+        # Create session record
+        session = Session(
+            user_id=user_id,
+            exercise_id=exercise_id,
+            video_path=video_path,
+            video_filename=filename,
+            video_size_bytes=file_size,
+            status="uploaded"
+        )
+        
+        db.session.add(session)
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Video uploaded successfully",
+            "session_id": session.id,
+            "filename": unique_filename,
+            "size_mb": round(file_size / (1024*1024), 2)
+        }), 201
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to save video: {str(e)}"}), 500
+
+@app.route("/process-ai/<int:session_id>", methods=["POST"])
+def process_video_with_ai(session_id):
+    """Process uploaded video with real AI analysis"""
+    
+    session = Session.query.get_or_404(session_id)
+    
+    if session.status == "processed":
+        return jsonify({"error": "Session already processed"}), 400
+    
+    if not session.video_path or not os.path.exists(session.video_path):
+        return jsonify({"error": "Video file not found"}), 404
+    
+    start_time = time.time()
+    
+    try:
+        # Update status
+        session.status = "processing"
+        db.session.commit()
+        
+        print(f"Starting AI processing for session {session_id}...")
+        
+        # Step 1: Extract poses from video
+        print("Step 1: Extracting poses from video...")
+        pose_data = pose_analyzer.extract_poses_from_video(session.video_path)
+        
+        # Update session with video info
+        video_info = pose_data['video_info']
+        session.fps = video_info['fps']
+        session.total_frames = video_info['total_frames']
+        session.duration_seconds = video_info['duration_seconds']
+        
+        # Step 2: Save pose landmarks to database
+        print("Step 2: Saving pose landmarks...")
+        pose_landmarks_saved = 0
+        for pose in pose_data['poses']:
+            landmark_record = PoseLandmarks(
+                session_id=session.id,
+                frame_number=pose['frame_number'],
+                timestamp=pose['timestamp'],
+                landmarks_json=json.dumps(pose['landmarks']),
+                visibility_scores=json.dumps(pose['visibility_scores'])
+            )
+            db.session.add(landmark_record)
+            pose_landmarks_saved += 1
+        
+        # Step 3: Analyze form based on exercise type
+        print("Step 3: Analyzing exercise form...")
+        exercise_name = session.exercise.name.lower()
+        
+        if "lat pull" in exercise_name or "pulldown" in exercise_name:
+            analysis = form_analyzer.analyze_lat_pulldown(pose_data['poses'])
+        elif "pull-up" in exercise_name or "pullup" in exercise_name:
+            analysis = form_analyzer.analyze_pullup(pose_data['poses'])
+        else:
+            # Generic analysis for other exercises
+            analysis = {
+                'exercise_type': 'generic',
+                'rep_count': len(pose_data['poses']) // 30 if pose_data['poses'] else 0,
+                'form_issues': [],
+                'metrics': {}
+            }
+        
+        # Update rep count
+        session.rep_count = analysis.get('rep_count', 0)
+        
+        # Step 4: Generate LLM feedback
+        print("Step 4: Generating AI feedback...")
+        llm_feedback = llm_generator.generate_feedback(
+            exercise_name=session.exercise.name,
+            analysis_data=analysis,
+            user_name=session.user.name
+        )
+        
+        # Step 5: Save feedback to database
+        print("Step 5: Saving feedback...")
+        feedback = Feedback(
+            session_id=session.id,
+            summary=llm_feedback['summary'],
+            form_score=llm_feedback['form_score'],
+            injury_risk_level=llm_feedback['injury_risk_level'],
+            recommendations=llm_feedback['recommendations'],
+            pose_analysis_data=json.dumps(analysis),
+            llm_model_used=config.ai.provider,
+            processing_time_ms=int((time.time() - start_time) * 1000),
+            confidence_score=llm_feedback.get('confidence_score', 0.8)
+        )
+        
+        # Mark session as processed
+        session.status = "processed"
+        
+        # Save everything
+        db.session.add(feedback)
+        db.session.commit()
+        
+        processing_time = time.time() - start_time
+        
+        print(f"AI processing completed in {processing_time:.2f} seconds")
+        
+        return jsonify({
+            "message": "AI processing completed successfully",
+            "session_id": session.id,
+            "feedback_id": feedback.id,
+            "processing_time_seconds": round(processing_time, 2),
+            "pose_landmarks_saved": pose_landmarks_saved,
+            "rep_count": session.rep_count,
+            "form_score": feedback.form_score,
+            "injury_risk_level": feedback.injury_risk_level,
+            "llm_generated": llm_feedback.get('llm_generated', True)
+        }), 200
+        
+    except Exception as e:
+        # Handle processing errors
+        session.status = "error"
+        session.processing_error = str(e)
+        db.session.commit()
+        
+        print(f"AI processing error: {e}")
+        
+        return jsonify({
+            "error": "AI processing failed",
+            "details": str(e),
+            "session_id": session.id
+        }), 500
+
+@app.route("/sessions/<int:session_id>/pose-data", methods=["GET"])
+def get_pose_data(session_id):
+    """Get pose landmarks for a session"""
+    session = Session.query.get_or_404(session_id)
+    
+    landmarks = PoseLandmarks.query.filter_by(session_id=session_id).all()
+    
+    pose_data = []
+    for landmark in landmarks:
+        pose_data.append({
+            'frame_number': landmark.frame_number,
+            'timestamp': landmark.timestamp,
+            'landmarks': landmark.get_landmarks(),
+            'visibility_scores': landmark.get_visibility_scores()
+        })
+    
+    return jsonify({
+        'session_id': session_id,
+        'total_landmarks': len(pose_data),
+        'fps': session.fps,
+        'duration_seconds': session.duration_seconds,
+        'pose_data': pose_data
+    })
+
+# ============================================================================
+# MAIN ROUTES
+# ============================================================================
+
+@app.route('/')
+def hello():
+    return jsonify({
+        "message": "APT API with Real AI Integration!", 
+        "version": "2.0",
+        "environment": config.environment,
+        "ai_features": ["pose_estimation", "form_analysis", "llm_feedback"]
+    })
+
+# ============================================================================
+# CRUD ROUTES
 # ============================================================================
 
 @app.route("/users", methods=["POST"])
@@ -73,7 +309,6 @@ def create_user():
     if not data or not data.get('name') or not data.get('email'):
         return jsonify({"error": "Name and email are required"}), 400
     
-    # Check if email already exists
     if User.query.filter_by(email=data['email']).first():
         return jsonify({"error": "Email already exists"}), 409
     
@@ -82,59 +317,17 @@ def create_user():
     db.session.commit()
     return jsonify({"id": user.id, "message": "User created successfully"}), 201
 
-@app.route("/users/<int:user_id>", methods=["GET"])
-def read_user(user_id):
-    """Get a specific user"""
-    user = User.query.get_or_404(user_id)
-    return jsonify({
-        "id": user.id,
-        "name": user.name,
-        "email": user.email,
-        "created_at": user.created_at.isoformat(),
-        "total_sessions": len(user.sessions)
-    })
-
 @app.route("/users", methods=["GET"])
 def list_users():
     """Get all users"""
     users = User.query.all()
-    return jsonify([{
-        "id": u.id,
-        "name": u.name,
-        "email": u.email,
-        "created_at": u.created_at.isoformat(),
-        "total_sessions": len(u.sessions)
-    } for u in users])
+    return jsonify([user.to_dict() for user in users])
 
-@app.route("/users/<int:user_id>", methods=["PUT"])
-def update_user(user_id):
-    """Update a user"""
+@app.route("/users/<int:user_id>", methods=["GET"])
+def read_user(user_id):
+    """Get a specific user"""
     user = User.query.get_or_404(user_id)
-    data = request.get_json()
-    
-    if data.get("name"):
-        user.name = data["name"]
-    if data.get("email"):
-        # Check if new email already exists for another user
-        existing = User.query.filter_by(email=data["email"]).first()
-        if existing and existing.id != user_id:
-            return jsonify({"error": "Email already exists"}), 409
-        user.email = data["email"]
-    
-    db.session.commit()
-    return jsonify({"message": "User updated successfully"})
-
-@app.route("/users/<int:user_id>", methods=["DELETE"])
-def delete_user(user_id):
-    """Delete a user"""
-    user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({"message": "User deleted successfully"})
-
-# ============================================================================
-# EXERCISE CRUD ROUTES
-# ============================================================================
+    return jsonify(user.to_dict())
 
 @app.route("/exercises", methods=["POST"])
 def create_exercise():
@@ -144,7 +337,7 @@ def create_exercise():
         return jsonify({"error": "Name and primary_muscle are required"}), 400
     
     exercise = Exercise(
-        name=data["name"],
+        name=data["name"], 
         primary_muscle=data["primary_muscle"],
         description=data.get("description", "")
     )
@@ -152,57 +345,11 @@ def create_exercise():
     db.session.commit()
     return jsonify({"id": exercise.id, "message": "Exercise created successfully"}), 201
 
-@app.route("/exercises/<int:exercise_id>", methods=["GET"])
-def read_exercise(exercise_id):
-    """Get a specific exercise"""
-    exercise = Exercise.query.get_or_404(exercise_id)
-    return jsonify({
-        "id": exercise.id,
-        "name": exercise.name,
-        "primary_muscle": exercise.primary_muscle,
-        "description": exercise.description,
-        "total_sessions": len(exercise.sessions)
-    })
-
 @app.route("/exercises", methods=["GET"])
 def list_exercises():
     """Get all exercises"""
     exercises = Exercise.query.all()
-    return jsonify([{
-        "id": e.id,
-        "name": e.name,
-        "primary_muscle": e.primary_muscle,
-        "description": e.description,
-        "total_sessions": len(e.sessions)
-    } for e in exercises])
-
-@app.route("/exercises/<int:exercise_id>", methods=["PUT"])
-def update_exercise(exercise_id):
-    """Update an exercise"""
-    exercise = Exercise.query.get_or_404(exercise_id)
-    data = request.get_json()
-    
-    if data.get("name"):
-        exercise.name = data["name"]
-    if data.get("primary_muscle"):
-        exercise.primary_muscle = data["primary_muscle"]
-    if "description" in data:
-        exercise.description = data["description"]
-    
-    db.session.commit()
-    return jsonify({"message": "Exercise updated successfully"})
-
-@app.route("/exercises/<int:exercise_id>", methods=["DELETE"])
-def delete_exercise(exercise_id):
-    """Delete an exercise"""
-    exercise = Exercise.query.get_or_404(exercise_id)
-    db.session.delete(exercise)
-    db.session.commit()
-    return jsonify({"message": "Exercise deleted successfully"})
-
-# ============================================================================
-# SESSION CRUD ROUTES
-# ============================================================================
+    return jsonify([exercise.to_dict() for exercise in exercises])
 
 @app.route("/sessions", methods=["POST"])
 def create_session():
@@ -211,273 +358,86 @@ def create_session():
     if not data or not data.get('user_id') or not data.get('exercise_id'):
         return jsonify({"error": "user_id and exercise_id are required"}), 400
     
-    # Verify user and exercise exist
     user = User.query.get(data['user_id'])
     exercise = Exercise.query.get(data['exercise_id'])
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    if not exercise:
-        return jsonify({"error": "Exercise not found"}), 404
+    if not user or not exercise:
+        return jsonify({"error": "User or exercise not found"}), 404
     
     session = Session(
-        user_id=data["user_id"],
+        user_id=data["user_id"], 
         exercise_id=data["exercise_id"],
-        video_path=data.get("video_path", ""),
-        status=data.get("status", "pending"),
-        rep_count=data.get("rep_count"),
+        rep_count=data.get("rep_count"), 
         duration_seconds=data.get("duration_seconds")
     )
     db.session.add(session)
     db.session.commit()
     return jsonify({"id": session.id, "message": "Session created successfully"}), 201
 
-@app.route("/sessions/<int:session_id>", methods=["GET"])
-def read_session(session_id):
-    """Get a specific session"""
-    session = Session.query.get_or_404(session_id)
-    return jsonify({
-        "id": session.id,
-        "user_id": session.user_id,
-        "user_name": session.user.name,
-        "exercise_id": session.exercise_id,
-        "exercise_name": session.exercise.name,
-        "performed_at": session.performed_at.isoformat(),
-        "video_path": session.video_path,
-        "status": session.status,
-        "rep_count": session.rep_count,
-        "duration_seconds": session.duration_seconds,
-        "feedback_count": len(session.feedback)
-    })
-
 @app.route("/sessions", methods=["GET"])
 def list_sessions():
     """Get all sessions"""
     sessions = Session.query.all()
-    return jsonify([{
-        "id": s.id,
-        "user_name": s.user.name,
-        "exercise_name": s.exercise.name,
-        "performed_at": s.performed_at.isoformat(),
-        "status": s.status,
-        "rep_count": s.rep_count,
-        "duration_seconds": s.duration_seconds
-    } for s in sessions])
+    return jsonify([session.to_dict() for session in sessions])
 
-@app.route("/sessions/<int:session_id>", methods=["PUT"])
-def update_session(session_id):
-    """Update a session"""
+@app.route("/sessions/<int:session_id>", methods=["GET"])
+def read_session(session_id):
+    """Get a specific session"""
     session = Session.query.get_or_404(session_id)
-    data = request.get_json()
-    
-    if data.get("video_path"):
-        session.video_path = data["video_path"]
-    if data.get("status"):
-        session.status = data["status"]
-    if "rep_count" in data:
-        session.rep_count = data["rep_count"]
-    if "duration_seconds" in data:
-        session.duration_seconds = data["duration_seconds"]
-    
-    db.session.commit()
-    return jsonify({"message": "Session updated successfully"})
-
-@app.route("/sessions/<int:session_id>", methods=["DELETE"])
-def delete_session(session_id):
-    """Delete a session"""
-    session = Session.query.get_or_404(session_id)
-    db.session.delete(session)
-    db.session.commit()
-    return jsonify({"message": "Session deleted successfully"})
-
-# ============================================================================
-# AI PROCESSING PIPELINE (SIMULATION)
-# ============================================================================
-
-@app.route("/process/<int:session_id>", methods=["POST"])
-def process_video(session_id):
-    """
-    Simulate AI video processing pipeline
-    This is where your pose estimation + LLM would run
-    """
-    session = Session.query.get_or_404(session_id)
-    
-    # Prevent reprocessing
-    if session.status == "processed":
-        return jsonify({"error": "Session already processed"}), 400
-    
-    # Update session status to processing
-    session.status = "processing"
-    db.session.commit()
-    
-    # Simulate different feedback based on exercise type
-    exercise_name = session.exercise.name.lower()
-    
-    if "lat pull" in exercise_name or "pulldown" in exercise_name:
-        feedback_data = {
-            "summary": "Lat pull-down analysis: Good range of motion detected. Minor form issue: back arching observed in reps 8-12. Recommend reducing weight by 10-15%.",
-            "form_score": 0.72,
-            "injury_risk_level": "medium", 
-            "recommendations": "1. Maintain neutral spine throughout movement. 2. Engage core before initiating pull. 3. Control eccentric phase. 4. Consider lighter weight to master form."
-        }
-    elif "pull-up" in exercise_name or "pullup" in exercise_name:
-        feedback_data = {
-            "summary": "Pull-up analysis: Strong concentric phase. Incomplete range of motion detected - not reaching full extension at bottom.",
-            "form_score": 0.68,
-            "injury_risk_level": "low",
-            "recommendations": "1. Complete full range of motion - arms fully extended at bottom. 2. Control descent speed. 3. Avoid swinging momentum."
-        }
-    elif "row" in exercise_name:
-        feedback_data = {
-            "summary": "Seated row analysis: Good posture maintenance. Slight forward head posture detected. Excellent rep consistency.",
-            "form_score": 0.83,
-            "injury_risk_level": "low",
-            "recommendations": "1. Keep chin tucked, eyes forward. 2. Squeeze shoulder blades at peak contraction. 3. Maintain current weight."
-        }
-    else:
-        # Generic feedback for other exercises
-        feedback_data = {
-            "summary": f"{session.exercise.name} analysis: Movement pattern analyzed. Form assessment completed.",
-            "form_score": 0.75,
-            "injury_risk_level": "low",
-            "recommendations": "Continue with current technique. Focus on controlled movement patterns."
-        }
-    
-    # Add rep count simulation based on duration (rough estimate)
-    if not session.rep_count and session.duration_seconds:
-        estimated_reps = max(1, int(session.duration_seconds / 3.5))  # ~3.5 seconds per rep
-        session.rep_count = estimated_reps
-    
-    # Create AI-generated feedback
-    feedback = Feedback(
-        session_id=session.id,
-        summary=feedback_data["summary"],
-        form_score=feedback_data["form_score"],
-        injury_risk_level=feedback_data["injury_risk_level"],
-        recommendations=feedback_data["recommendations"]
-    )
-    
-    # Mark session as processed
-    session.status = "processed"
-    
-    # Save everything
-    db.session.add(feedback)
-    db.session.commit()
-    
-    return jsonify({
-        "message": "Video processing completed",
-        "feedback_id": feedback.id,
-        "session_id": session.id,
-        "form_score": feedback.form_score,
-        "injury_risk_level": feedback.injury_risk_level,
-        "processing_time_ms": 850  # Simulate processing time
-    }), 200
-
-@app.route("/sessions/<int:session_id>/process-status", methods=["GET"])
-def get_processing_status(session_id):
-    """Check processing status of a session"""
-    session = Session.query.get_or_404(session_id)
-    
-    response_data = {
-        "session_id": session.id,
-        "status": session.status,
-        "user_name": session.user.name,
-        "exercise_name": session.exercise.name,
-        "performed_at": session.performed_at.isoformat()
-    }
-    
-    if session.status == "processed" and session.feedback:
-        latest_feedback = session.feedback[-1]  # Get most recent feedback
-        response_data.update({
-            "feedback_id": latest_feedback.id,
-            "form_score": latest_feedback.form_score,
-            "injury_risk_level": latest_feedback.injury_risk_level,
-            "summary": latest_feedback.summary
-        })
-    
-    return jsonify(response_data)
-
-# ============================================================================
-# FEEDBACK CRUD ROUTES
-# ============================================================================
-
-@app.route("/feedback", methods=["POST"])
-def create_feedback():
-    """Create feedback for a session"""
-    data = request.get_json()
-    if not data or not data.get('session_id') or not data.get('summary'):
-        return jsonify({"error": "session_id and summary are required"}), 400
-    
-    # Verify session exists
-    session = Session.query.get(data['session_id'])
-    if not session:
-        return jsonify({"error": "Session not found"}), 404
-    
-    feedback = Feedback(
-        session_id=data["session_id"],
-        summary=data["summary"],
-        form_score=data.get("form_score"),
-        injury_risk_level=data.get("injury_risk_level", "low"),
-        recommendations=data.get("recommendations", "")
-    )
-    db.session.add(feedback)
-    db.session.commit()
-    return jsonify({"id": feedback.id, "message": "Feedback created successfully"}), 201
-
-@app.route("/feedback/<int:feedback_id>", methods=["GET"])
-def read_feedback(feedback_id):
-    """Get specific feedback"""
-    feedback = Feedback.query.get_or_404(feedback_id)
-    return jsonify({
-        "id": feedback.id,
-        "session_id": feedback.session_id,
-        "user_name": feedback.session.user.name,
-        "exercise_name": feedback.session.exercise.name,
-        "summary": feedback.summary,
-        "form_score": feedback.form_score,
-        "injury_risk_level": feedback.injury_risk_level,
-        "recommendations": feedback.recommendations,
-        "created_at": feedback.created_at.isoformat()
-    })
+    return jsonify(session.to_dict())
 
 @app.route("/sessions/<int:session_id>/feedback", methods=["GET"])
 def list_session_feedback(session_id):
     """Get all feedback for a specific session"""
     session = Session.query.get_or_404(session_id)
-    return jsonify([{
-        "id": f.id,
-        "summary": f.summary,
-        "form_score": f.form_score,
-        "injury_risk_level": f.injury_risk_level,
-        "recommendations": f.recommendations,
-        "created_at": f.created_at.isoformat()
-    } for f in session.feedback])
+    return jsonify([feedback.to_dict() for feedback in session.feedback])
 
-@app.route("/feedback/<int:feedback_id>", methods=["PUT"])
-def update_feedback(feedback_id):
-    """Update feedback"""
-    feedback = Feedback.query.get_or_404(feedback_id)
-    data = request.get_json()
-    
-    if data.get("summary"):
-        feedback.summary = data["summary"]
-    if "form_score" in data:
-        feedback.form_score = data["form_score"]
-    if data.get("injury_risk_level"):
-        feedback.injury_risk_level = data["injury_risk_level"]
-    if "recommendations" in data:
-        feedback.recommendations = data["recommendations"]
-    
-    db.session.commit()
-    return jsonify({"message": "Feedback updated successfully"})
+# Backward compatibility
+@app.route("/process/<int:session_id>", methods=["POST"])
+def process_video_simulation(session_id):
+    """Backward compatibility - redirects to AI processing"""
+    return process_video_with_ai(session_id)
 
-@app.route("/feedback/<int:feedback_id>", methods=["DELETE"])
-def delete_feedback(feedback_id):
-    """Delete feedback"""
-    feedback = Feedback.query.get_or_404(feedback_id)
-    db.session.delete(feedback)
-    db.session.commit()
-    return jsonify({"message": "Feedback deleted successfully"})
+# ============================================================================
+# AI STATUS AND MONITORING
+# ============================================================================
+
+@app.route("/ai-status", methods=["GET"])
+def ai_status():
+    """Check AI system status"""
+    
+    status = {
+        "pose_analyzer": "ready",
+        "form_analyzer": "ready",
+        "llm_generator": "unknown",
+        "llm_provider": config.ai.provider,
+        "environment": config.environment,
+        "supported_exercises": ["lat_pulldown", "pullup", "generic"],
+        "max_video_size_mb": config.video.max_size_mb,
+        "supported_formats": config.video.supported_formats
+    }
+    
+    # Add provider-specific status info
+    if config.ai.provider == "kolosal":
+        status["kolosal_url"] = config.ai.kolosal_url
+        status["local_model"] = config.ai.kolosal_model
+    
+    # Test LLM connection
+    try:
+        if llm_generator.test_connection():
+            status["llm_generator"] = "ready"
+        else:
+            status["llm_generator"] = "error - connection failed"
+    except Exception as e:
+        status["llm_generator"] = f"error - {str(e)}"
+        if config.ai.provider == "kolosal":
+            status["kolosal_error"] = "Make sure Kolosal.AI server is running with your Gemma model loaded"
+    
+    return jsonify(status)
 
 if __name__ == '__main__':
-    init_db()  # Create tables when running directly
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    init_db()
+    print("🤖 APT API with Real AI Integration Starting...")
+    print("📹 Video upload endpoint: POST /upload-video")
+    print("🧠 AI processing endpoint: POST /process-ai/<session_id>")
+    print("📊 AI status check: GET /ai-status")
+    app.run(debug=config.debug, host=config.host, port=config.port)
