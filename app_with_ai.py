@@ -7,109 +7,58 @@ import json
 import time
 from werkzeug.utils import secure_filename
 from ai_processor import PoseAnalyzer, FormAnalyzer, LLMFeedbackGenerator
-from config import AIConfig
+from config import get_config, validate_config, print_config_summary
+
+# Get configuration
+config = get_config()
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///apt.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config['MAX_CONTENT_LENGTH'] = AIConfig.MAX_VIDEO_SIZE_MB * 1024 * 1024  # File size limit
+app.config["SQLALCHEMY_DATABASE_URI"] = config.database.uri
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.database.track_modifications
+app.config['MAX_CONTENT_LENGTH'] = config.video.max_size_mb * 1024 * 1024
+app.config['SECRET_KEY'] = config.security.secret_key
 
 # Create upload directories
-UPLOAD_FOLDER = 'uploads'
-POSE_DATA_FOLDER = 'pose_data'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(POSE_DATA_FOLDER, exist_ok=True)
+os.makedirs(config.video.upload_folder, exist_ok=True)
+os.makedirs(config.video.pose_data_folder, exist_ok=True)
 
 db = SQLAlchemy(app)
-CORS(app)
+CORS(app, origins=config.security.cors_origins.split(',') if config.security.cors_origins != '*' else '*')
+
+# Validate configuration
+if not validate_config():
+    print("❌ Configuration validation failed!")
+    exit(1)
+
+print_config_summary()
 
 # Initialize AI components
 pose_analyzer = PoseAnalyzer()
 form_analyzer = FormAnalyzer()
 
 # Initialize LLM generator based on provider
-if AIConfig.LLM_PROVIDER == "kolosal":
+if config.ai.provider == "kolosal":
     llm_generator = LLMFeedbackGenerator(
         provider="kolosal",
-        kolosal_url=AIConfig.KOLOSAL_API_URL
+        kolosal_url=config.ai.kolosal_url
     )
-elif AIConfig.LLM_PROVIDER == "openai":
+elif config.ai.provider == "openai":
     llm_generator = LLMFeedbackGenerator(
-        api_key=AIConfig.OPENAI_API_KEY,
+        api_key=config.ai.openai_key,
         provider="openai"
     )
-elif AIConfig.LLM_PROVIDER == "anthropic":
+elif config.ai.provider == "anthropic":
     llm_generator = LLMFeedbackGenerator(
-        api_key=AIConfig.ANTHROPIC_API_KEY,
+        api_key=config.ai.anthropic_key,
         provider="anthropic"
     )
 else:
-    raise ValueError(f"Unsupported LLM provider: {AIConfig.LLM_PROVIDER}")
+    raise ValueError(f"Unsupported LLM provider: {config.ai.provider}")
 
-print(f"🤖 Using LLM Provider: {AIConfig.LLM_PROVIDER}")
+print(f"🤖 Using LLM Provider: {config.ai.provider}")
 
-# Database Models (Updated with AI fields)
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    sessions = db.relationship('Session', backref='user', lazy=True)
-
-class Exercise(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    primary_muscle = db.Column(db.String(80), nullable=False)
-    description = db.Column(db.Text)
-    sessions = db.relationship('Session', backref='exercise', lazy=True)
-
-class Session(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    exercise_id = db.Column(db.Integer, db.ForeignKey("exercise.id"), nullable=False)
-    performed_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Video and processing fields
-    video_path = db.Column(db.String(200))
-    video_filename = db.Column(db.String(200))
-    video_size_bytes = db.Column(db.Integer)
-    fps = db.Column(db.Float)
-    total_frames = db.Column(db.Integer)
-    duration_seconds = db.Column(db.Float)
-    
-    # AI processing fields
-    pose_data_path = db.Column(db.String(200))
-    processing_error = db.Column(db.Text)
-    status = db.Column(db.String(20), default="pending")
-    rep_count = db.Column(db.Integer)
-    
-    # Relationships
-    feedback = db.relationship('Feedback', backref='session', lazy=True)
-    pose_landmarks = db.relationship('PoseLandmarks', backref='session', lazy=True)
-
-class PoseLandmarks(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey("session.id"), nullable=False)
-    frame_number = db.Column(db.Integer, nullable=False)
-    timestamp = db.Column(db.Float, nullable=False)
-    landmarks_json = db.Column(db.Text, nullable=False)
-    visibility_scores = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class Feedback(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey("session.id"), nullable=False)
-    summary = db.Column(db.Text, nullable=False)
-    form_score = db.Column(db.Float)
-    injury_risk_level = db.Column(db.String(20))
-    recommendations = db.Column(db.Text)
-    
-    # AI-specific fields
-    pose_analysis_data = db.Column(db.Text)
-    llm_model_used = db.Column(db.String(50))
-    processing_time_ms = db.Column(db.Integer)
-    confidence_score = db.Column(db.Float)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+# Import models (now from separate file)
+from models import User, Exercise, Session, PoseLandmarks, Feedback, db
 
 def init_db():
     """Create all database tables"""
@@ -120,7 +69,7 @@ def init_db():
 def allowed_file(filename):
     """Check if uploaded file is allowed"""
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in [f.strip('.') for f in AIConfig.SUPPORTED_FORMATS]
+           filename.rsplit('.', 1)[1].lower() in [f.strip('.') for f in config.video.supported_formats]
 
 # ============================================================================
 # VIDEO UPLOAD AND AI PROCESSING ROUTES
@@ -138,7 +87,7 @@ def upload_video():
         return jsonify({"error": "No video file selected"}), 400
     
     if not allowed_file(file.filename):
-        return jsonify({"error": f"File type not supported. Use: {AIConfig.SUPPORTED_FORMATS}"}), 400
+        return jsonify({"error": f"File type not supported. Use: {config.video.supported_formats}"}), 400
     
     # Get form data
     user_id = request.form.get('user_id', type=int)
@@ -157,7 +106,7 @@ def upload_video():
     filename = secure_filename(file.filename)
     timestamp = int(time.time())
     unique_filename = f"{timestamp}_{filename}"
-    video_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+    video_path = os.path.join(config.video.upload_folder, unique_filename)
     
     try:
         file.save(video_path)
@@ -268,7 +217,7 @@ def process_video_with_ai(session_id):
             injury_risk_level=llm_feedback['injury_risk_level'],
             recommendations=llm_feedback['recommendations'],
             pose_analysis_data=json.dumps(analysis),
-            llm_model_used=AIConfig.LLM_PROVIDER,
+            llm_model_used=config.ai.provider,
             processing_time_ms=int((time.time() - start_time) * 1000),
             confidence_score=llm_feedback.get('confidence_score', 0.8)
         )
@@ -322,8 +271,8 @@ def get_pose_data(session_id):
         pose_data.append({
             'frame_number': landmark.frame_number,
             'timestamp': landmark.timestamp,
-            'landmarks': json.loads(landmark.landmarks_json),
-            'visibility_scores': json.loads(landmark.visibility_scores) if landmark.visibility_scores else []
+            'landmarks': landmark.get_landmarks(),
+            'visibility_scores': landmark.get_visibility_scores()
         })
     
     return jsonify({
@@ -335,22 +284,22 @@ def get_pose_data(session_id):
     })
 
 # ============================================================================
-# EXISTING CRUD ROUTES (Keep all your existing routes)
+# MAIN ROUTES
 # ============================================================================
 
 @app.route('/')
 def hello():
     return jsonify({
         "message": "APT API with Real AI Integration!", 
-        "version": "1.0",
+        "version": "2.0",
+        "environment": config.environment,
         "ai_features": ["pose_estimation", "form_analysis", "llm_feedback"]
     })
 
 # ============================================================================
-# EXISTING CRUD ROUTES
+# CRUD ROUTES
 # ============================================================================
 
-# USER CRUD ROUTES
 @app.route("/users", methods=["POST"])
 def create_user():
     """Create a new user"""
@@ -366,25 +315,18 @@ def create_user():
     db.session.commit()
     return jsonify({"id": user.id, "message": "User created successfully"}), 201
 
-@app.route("/users/<int:user_id>", methods=["GET"])
-def read_user(user_id):
-    """Get a specific user"""
-    user = User.query.get_or_404(user_id)
-    return jsonify({
-        "id": user.id, "name": user.name, "email": user.email,
-        "created_at": user.created_at.isoformat(), "total_sessions": len(user.sessions)
-    })
-
 @app.route("/users", methods=["GET"])
 def list_users():
     """Get all users"""
     users = User.query.all()
-    return jsonify([{
-        "id": u.id, "name": u.name, "email": u.email,
-        "created_at": u.created_at.isoformat(), "total_sessions": len(u.sessions)
-    } for u in users])
+    return jsonify([user.to_dict() for user in users])
 
-# EXERCISE CRUD ROUTES  
+@app.route("/users/<int:user_id>", methods=["GET"])
+def read_user(user_id):
+    """Get a specific user"""
+    user = User.query.get_or_404(user_id)
+    return jsonify(user.to_dict())
+
 @app.route("/exercises", methods=["POST"])
 def create_exercise():
     """Create a new exercise"""
@@ -393,7 +335,8 @@ def create_exercise():
         return jsonify({"error": "Name and primary_muscle are required"}), 400
     
     exercise = Exercise(
-        name=data["name"], primary_muscle=data["primary_muscle"],
+        name=data["name"], 
+        primary_muscle=data["primary_muscle"],
         description=data.get("description", "")
     )
     db.session.add(exercise)
@@ -404,12 +347,8 @@ def create_exercise():
 def list_exercises():
     """Get all exercises"""
     exercises = Exercise.query.all()
-    return jsonify([{
-        "id": e.id, "name": e.name, "primary_muscle": e.primary_muscle,
-        "description": e.description, "total_sessions": len(e.sessions)
-    } for e in exercises])
+    return jsonify([exercise.to_dict() for exercise in exercises])
 
-# SESSION CRUD ROUTES
 @app.route("/sessions", methods=["POST"])
 def create_session():
     """Create a new workout session"""
@@ -423,8 +362,10 @@ def create_session():
         return jsonify({"error": "User or exercise not found"}), 404
     
     session = Session(
-        user_id=data["user_id"], exercise_id=data["exercise_id"],
-        rep_count=data.get("rep_count"), duration_seconds=data.get("duration_seconds")
+        user_id=data["user_id"], 
+        exercise_id=data["exercise_id"],
+        rep_count=data.get("rep_count"), 
+        duration_seconds=data.get("duration_seconds")
     )
     db.session.add(session)
     db.session.commit()
@@ -434,35 +375,21 @@ def create_session():
 def list_sessions():
     """Get all sessions"""
     sessions = Session.query.all()
-    return jsonify([{
-        "id": s.id, "user_name": s.user.name, "exercise_name": s.exercise.name,
-        "performed_at": s.performed_at.isoformat(), "status": s.status,
-        "rep_count": s.rep_count, "duration_seconds": s.duration_seconds
-    } for s in sessions])
+    return jsonify([session.to_dict() for session in sessions])
 
 @app.route("/sessions/<int:session_id>", methods=["GET"])
 def read_session(session_id):
     """Get a specific session"""
     session = Session.query.get_or_404(session_id)
-    return jsonify({
-        "id": session.id, "user_name": session.user.name,
-        "exercise_name": session.exercise.name, "performed_at": session.performed_at.isoformat(),
-        "status": session.status, "rep_count": session.rep_count,
-        "duration_seconds": session.duration_seconds, "feedback_count": len(session.feedback)
-    })
+    return jsonify(session.to_dict())
 
-# FEEDBACK ROUTES
 @app.route("/sessions/<int:session_id>/feedback", methods=["GET"])
 def list_session_feedback(session_id):
     """Get all feedback for a specific session"""
     session = Session.query.get_or_404(session_id)
-    return jsonify([{
-        "id": f.id, "summary": f.summary, "form_score": f.form_score,
-        "injury_risk_level": f.injury_risk_level, "recommendations": f.recommendations,
-        "created_at": f.created_at.isoformat()
-    } for f in session.feedback])
+    return jsonify([feedback.to_dict() for feedback in session.feedback])
 
-# SIMULATION ENDPOINT (for backward compatibility)
+# Backward compatibility
 @app.route("/process/<int:session_id>", methods=["POST"])
 def process_video_simulation(session_id):
     """Backward compatibility - redirects to AI processing"""
@@ -480,16 +407,17 @@ def ai_status():
         "pose_analyzer": "ready",
         "form_analyzer": "ready",
         "llm_generator": "unknown",
-        "llm_provider": AIConfig.LLM_PROVIDER,
+        "llm_provider": config.ai.provider,
+        "environment": config.environment,
         "supported_exercises": ["lat_pulldown", "pullup", "generic"],
-        "max_video_size_mb": AIConfig.MAX_VIDEO_SIZE_MB,
-        "supported_formats": AIConfig.SUPPORTED_FORMATS
+        "max_video_size_mb": config.video.max_size_mb,
+        "supported_formats": config.video.supported_formats
     }
     
     # Add provider-specific status info
-    if AIConfig.LLM_PROVIDER == "kolosal":
-        status["kolosal_url"] = AIConfig.KOLOSAL_API_URL
-        status["local_model"] = AIConfig.LOCAL_MODEL_NAME
+    if config.ai.provider == "kolosal":
+        status["kolosal_url"] = config.ai.kolosal_url
+        status["local_model"] = config.ai.kolosal_model
     
     # Test LLM connection
     try:
@@ -499,7 +427,7 @@ def ai_status():
             status["llm_generator"] = "error - connection failed"
     except Exception as e:
         status["llm_generator"] = f"error - {str(e)}"
-        if AIConfig.LLM_PROVIDER == "kolosal":
+        if config.ai.provider == "kolosal":
             status["kolosal_error"] = "Make sure Kolosal.AI server is running with your Gemma model loaded"
     
     return jsonify(status)
@@ -510,4 +438,4 @@ if __name__ == '__main__':
     print("📹 Video upload endpoint: POST /upload-video")
     print("🧠 AI processing endpoint: POST /process-ai/<session_id>")
     print("📊 AI status check: GET /ai-status")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=config.debug, host=config.host, port=config.port)

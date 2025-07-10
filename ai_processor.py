@@ -6,6 +6,9 @@ import os
 import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
+from config import get_config
+
+config = get_config()
 
 class PoseAnalyzer:
     """Real-time pose analysis using MediaPipe"""
