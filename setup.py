@@ -40,11 +40,13 @@ def create_virtual_environment():
 
 def install_dependencies():
     """Install Python dependencies"""
-    # Determine the correct pip path based on OS
+    # Determine the correct python and pip paths based on OS
     if os.name == 'nt':  # Windows
-        pip_cmd = "venv\\Scripts\\pip"
+        python_cmd = "venv\\Scripts\\python"
+        pip_cmd = f"{python_cmd} -m pip"
     else:  # Unix/Linux/macOS
-        pip_cmd = "venv/bin/pip"
+        python_cmd = "venv/bin/python"
+        pip_cmd = f"{python_cmd} -m pip"
     
     commands = [
         f"{pip_cmd} install --upgrade pip",
@@ -79,6 +81,7 @@ DEBUG=true
 SECRET_KEY=dev-key-change-in-production
 LLM_PROVIDER=kolosal
 KOLOSAL_API_URL=http://localhost:8080
+KOLOSAL_MODEL=Gemma 3 4B:4-bit
 """
         try:
             with open(".env", "w") as f:
@@ -123,7 +126,7 @@ def test_imports():
         python_cmd = "venv/bin/python"
     
     for package in required_packages:
-        test_cmd = f"{python_cmd} -c 'import {package}; print(\"✅ {package} imported successfully\")'"
+        test_cmd = f"{python_cmd} -c \"import {package}; print('✅ {package} imported successfully')\""
         if not run_command(test_cmd, f"Testing {package} import"):
             print(f"❌ Failed to import {package}")
             return False
@@ -138,7 +141,33 @@ def initialize_database():
     else:  # Unix/Linux/macOS
         python_cmd = "venv/bin/python"
     
-    return run_command(f"{python_cmd} -c 'from app import create_app; from models import db; app = create_app(); app.app_context().push(); db.create_all(); print(\"Database initialized\")'", "Initializing database")
+    # Simple database initialization
+    init_script = """
+from models import db
+from flask import Flask
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///apt.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+    print('Database initialized')
+"""
+    
+    try:
+        with open('temp_init.py', 'w') as f:
+            f.write(init_script)
+        
+        result = run_command(f"{python_cmd} temp_init.py", "Initializing database")
+        os.remove('temp_init.py')
+        return result
+    except Exception as e:
+        print(f"❌ Database initialization failed: {e}")
+        if os.path.exists('temp_init.py'):
+            os.remove('temp_init.py')
+        return False
 
 def print_next_steps():
     """Print instructions for next steps"""
@@ -156,13 +185,17 @@ def print_next_steps():
     print("   - Set your API keys if using cloud LLMs")
     print("   - Configure Kolosal.AI URL if using local LLM")
     
-    print("\n3. Start the API server:")
-    print("   python app.py")
+    print("\n3. Start your Kolosal.AI server:")
+    print("   - Load your Gemma 3 4B model")
+    print("   - Start server on port 8080")
     
-    print("\n4. (Optional) Start the Streamlit frontend:")
+    print("\n4. Start the API server:")
+    print("   python app_with_ai.py")
+    
+    print("\n5. (Optional) Start the Streamlit frontend:")
     print("   streamlit run frontend.py")
     
-    print("\n5. Test the API:")
+    print("\n6. Test the system:")
     print("   curl http://localhost:5000/")
     print("   curl http://localhost:5000/ai-status")
     
@@ -197,6 +230,19 @@ def main():
         print(f"\n📋 {description}...")
         if not step_function():
             print(f"❌ Setup failed at: {description}")
+            
+            # Provide helpful error message for common issues
+            if description == "Installing dependencies":
+                print("\n💡 Try manual installation:")
+                if os.name == 'nt':
+                    print("   venv\\Scripts\\activate")
+                    print("   venv\\Scripts\\python -m pip install --upgrade pip")
+                    print("   venv\\Scripts\\python -m pip install -r requirements.txt")
+                else:
+                    print("   source venv/bin/activate")
+                    print("   pip install --upgrade pip")
+                    print("   pip install -r requirements.txt")
+            
             sys.exit(1)
     
     print_next_steps()

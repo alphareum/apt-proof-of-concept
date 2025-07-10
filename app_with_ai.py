@@ -9,6 +9,9 @@ from werkzeug.utils import secure_filename
 from ai_processor import PoseAnalyzer, FormAnalyzer, LLMFeedbackGenerator
 from config import get_config, validate_config, print_config_summary
 
+# Import models and db instance
+from models import db, User, Exercise, Session, PoseLandmarks, Feedback
+
 # Get configuration
 config = get_config()
 
@@ -18,11 +21,13 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.database.track_modificatio
 app.config['MAX_CONTENT_LENGTH'] = config.video.max_size_mb * 1024 * 1024
 app.config['SECRET_KEY'] = config.security.secret_key
 
+# Initialize the db with the app (this was missing!)
+db.init_app(app)
+
 # Create upload directories
 os.makedirs(config.video.upload_folder, exist_ok=True)
 os.makedirs(config.video.pose_data_folder, exist_ok=True)
 
-db = SQLAlchemy(app)
 CORS(app, origins=config.security.cors_origins.split(',') if config.security.cors_origins != '*' else '*')
 
 # Validate configuration
@@ -56,9 +61,6 @@ else:
     raise ValueError(f"Unsupported LLM provider: {config.ai.provider}")
 
 print(f"🤖 Using LLM Provider: {config.ai.provider}")
-
-# Import models (now from separate file)
-from models import User, Exercise, Session, PoseLandmarks, Feedback, db
 
 def init_db():
     """Create all database tables"""

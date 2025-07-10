@@ -4,19 +4,20 @@ import json
 import pandas as pd
 from datetime import datetime, timedelta
 import time
+import io
 
 # API Configuration
 API_BASE_URL = "http://localhost:5000"
 
 # Page configuration
 st.set_page_config(
-    page_title="APT - AI Personal Trainer Dashboard",
+    page_title="APT - AI Personal Trainer Dashboard v2.0",
     page_icon="🏋️‍♀️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Enhanced CSS
 st.markdown("""
 <style>
     .main-header {
@@ -46,17 +47,35 @@ st.markdown("""
         border-radius: 0.25rem;
         border: 1px solid #ffeaa7;
     }
+    .ai-status-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+    .video-upload-zone {
+        border: 2px dashed #1f77b4;
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        background-color: #f8f9fa;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-def make_api_request(method, endpoint, data=None):
-    """Make API request with error handling"""
+def make_api_request(method, endpoint, data=None, files=None):
+    """Enhanced API request with file upload support"""
     try:
         url = f"{API_BASE_URL}{endpoint}"
+        
         if method == "GET":
             response = requests.get(url)
         elif method == "POST":
-            response = requests.post(url, json=data)
+            if files:
+                response = requests.post(url, data=data, files=files)
+            else:
+                response = requests.post(url, json=data)
         elif method == "PUT":
             response = requests.put(url, json=data)
         elif method == "DELETE":
@@ -71,30 +90,50 @@ def make_api_request(method, endpoint, data=None):
     except Exception as e:
         return f"Error: {str(e)}", False
 
+def get_ai_status():
+    """Get detailed AI system status"""
+    status_data, success = make_api_request("GET", "/ai-status")
+    return status_data if success else {}
+
 def main():
-    # Header
-    st.markdown('<div class="main-header">🏋️‍♀️ AI Personal Trainer Dashboard</div>', unsafe_allow_html=True)
+    # Header with version info
+    st.markdown('<div class="main-header">🏋️‍♀️ AI Personal Trainer Dashboard v2.0</div>', unsafe_allow_html=True)
     
-    # Sidebar navigation
-    st.sidebar.title("Navigation")
+    # Sidebar with enhanced navigation
+    st.sidebar.title("🧭 Navigation")
+    
+    # AI Status in sidebar
+    ai_status = get_ai_status()
+    if ai_status:
+        llm_status = ai_status.get('llm_generator', 'unknown')
+        if llm_status == 'ready':
+            st.sidebar.success(f"🤖 AI: {ai_status.get('llm_provider', 'unknown').title()} Ready")
+        else:
+            st.sidebar.error(f"🤖 AI: {llm_status}")
+        
+        st.sidebar.info(f"🌍 Environment: {ai_status.get('environment', 'unknown')}")
+    
     page = st.sidebar.selectbox("Choose a page", [
         "📊 Dashboard",
         "👥 User Management", 
         "💪 Exercise Management",
         "🎯 Workout Sessions",
+        "📹 Video Upload",
         "🤖 AI Analysis",
-        "📝 Feedback Review"
+        "📝 Feedback Review",
+        "⚙️ System Status"
     ])
     
     # Check API connection
-    api_status, api_ok = make_api_request("GET", "/")
+    api_response, api_ok = make_api_request("GET", "/")
     if not api_ok:
-        st.error(api_status)
+        st.error(api_response)
         st.stop()
     else:
-        st.sidebar.success("✅ API Connected")
+        version = api_response.get('version', 'unknown')
+        st.sidebar.success(f"✅ API Connected (v{version})")
     
-    # Route to different pages
+    # Route to pages
     if page == "📊 Dashboard":
         show_dashboard()
     elif page == "👥 User Management":
@@ -103,13 +142,29 @@ def main():
         show_exercise_management()
     elif page == "🎯 Workout Sessions":
         show_session_management()
+    elif page == "📹 Video Upload":
+        show_video_upload()
     elif page == "🤖 AI Analysis":
         show_ai_analysis()
     elif page == "📝 Feedback Review":
         show_feedback_review()
+    elif page == "⚙️ System Status":
+        show_system_status()
 
 def show_dashboard():
     st.header("📊 Dashboard Overview")
+    
+    # Enhanced AI status card
+    ai_status = get_ai_status()
+    if ai_status:
+        st.markdown(f"""
+        <div class="ai-status-card">
+            <h3>🤖 AI System Status</h3>
+            <p><strong>Provider:</strong> {ai_status.get('llm_provider', 'unknown').title()}</p>
+            <p><strong>Status:</strong> {ai_status.get('llm_generator', 'unknown')}</p>
+            <p><strong>Environment:</strong> {ai_status.get('environment', 'unknown')}</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Get data for dashboard
     users_data, _ = make_api_request("GET", "/users")
@@ -117,8 +172,8 @@ def show_dashboard():
     sessions_data, _ = make_api_request("GET", "/sessions")
     
     if isinstance(users_data, list) and isinstance(exercises_data, list) and isinstance(sessions_data, list):
-        # Metrics
-        col1, col2, col3, col4 = st.columns(4)
+        # Enhanced metrics
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             st.metric("👥 Total Users", len(users_data))
@@ -128,29 +183,291 @@ def show_dashboard():
             st.metric("🎯 Total Sessions", len(sessions_data))
         with col4:
             processed_sessions = len([s for s in sessions_data if s.get('status') == 'processed'])
-            st.metric("✅ Processed Sessions", processed_sessions)
+            st.metric("✅ Processed", processed_sessions)
+        with col5:
+            avg_form_score = 0
+            if processed_sessions > 0:
+                # This would need API enhancement to get average form scores
+                avg_form_score = 78  # Placeholder
+            st.metric("📈 Avg Form Score", f"{avg_form_score}%")
         
         st.divider()
         
-        # Recent activity
+        # Recent activity with enhanced info
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Recent Users")
+            st.subheader("👥 Recent Users")
             if users_data:
                 users_df = pd.DataFrame(users_data)
-                st.dataframe(users_df[['name', 'email', 'total_sessions']], use_container_width=True)
+                users_df['created_at'] = pd.to_datetime(users_df['created_at']).dt.strftime('%m-%d %H:%M')
+                display_df = users_df[['name', 'email', 'total_sessions', 'created_at']]
+                display_df.columns = ['Name', 'Email', 'Sessions', 'Created']
+                st.dataframe(display_df, use_container_width=True)
             else:
                 st.info("No users found")
         
         with col2:
-            st.subheader("Recent Sessions")
+            st.subheader("🎯 Recent Sessions")
             if sessions_data:
                 sessions_df = pd.DataFrame(sessions_data)
-                st.dataframe(sessions_df[['user_name', 'exercise_name', 'status', 'rep_count']], use_container_width=True)
+                sessions_df['performed_at'] = pd.to_datetime(sessions_df['performed_at']).dt.strftime('%m-%d %H:%M')
+                
+                # Enhanced status display
+                status_map = {'pending': '⏳', 'processing': '🔄', 'processed': '✅', 'error': '❌'}
+                sessions_df['status_icon'] = sessions_df['status'].map(status_map)
+                sessions_df['Status'] = sessions_df['status_icon'] + ' ' + sessions_df['status']
+                
+                display_df = sessions_df[['user_name', 'exercise_name', 'Status', 'performed_at']].head(10)
+                display_df.columns = ['User', 'Exercise', 'Status', 'Time']
+                st.dataframe(display_df, use_container_width=True)
             else:
                 st.info("No sessions found")
 
+def show_video_upload():
+    """New video upload functionality"""
+    st.header("📹 Video Upload & AI Analysis")
+    
+    # Get users and exercises for the form
+    users_data, _ = make_api_request("GET", "/users")
+    exercises_data, _ = make_api_request("GET", "/exercises")
+    
+    if not users_data or not exercises_data:
+        st.warning("⚠️ You need to create at least one user and one exercise before uploading videos!")
+        return
+    
+    st.markdown("""
+    <div class="video-upload-zone">
+        <h3>📹 Upload Exercise Video</h3>
+        <p>Upload a video of your workout for AI-powered form analysis</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    with st.form("video_upload_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # User selection
+            user_options = {f"{u['name']} ({u['email']})": u['id'] for u in users_data}
+            selected_user = st.selectbox("👤 Select User", list(user_options.keys()))
+        
+        with col2:
+            # Exercise selection
+            exercise_options = {f"{e['name']} - {e['primary_muscle']}": e['id'] for e in exercises_data}
+            selected_exercise = st.selectbox("💪 Select Exercise", list(exercise_options.keys()))
+        
+        # Video file upload
+        uploaded_file = st.file_uploader(
+            "Choose video file", 
+            type=['mp4', 'avi', 'mov', 'mkv'],
+            help="Supported formats: MP4, AVI, MOV, MKV (max 100MB)"
+        )
+        
+        submitted = st.form_submit_button("🚀 Upload & Analyze", type="primary")
+        
+        if submitted and uploaded_file:
+            user_id = user_options[selected_user]
+            exercise_id = exercise_options[selected_exercise]
+            
+            # Create form data for upload
+            files = {'video': uploaded_file}
+            data = {'user_id': user_id, 'exercise_id': exercise_id}
+            
+            with st.spinner("📤 Uploading video..."):
+                result, success = make_api_request("POST", "/upload-video", data=data, files=files)
+                
+                if success:
+                    session_id = result.get('session_id')
+                    file_size = result.get('size_mb')
+                    
+                    st.success(f"✅ Video uploaded successfully! ({file_size}MB)")
+                    st.info(f"📋 Session ID: {session_id}")
+                    
+                    # Automatically trigger AI analysis
+                    with st.spinner("🤖 Running AI analysis..."):
+                        time.sleep(1)  # Small delay for better UX
+                        ai_result, ai_success = make_api_request("POST", f"/process-ai/{session_id}")
+                        
+                        if ai_success:
+                            st.success("🎉 AI analysis completed!")
+                            
+                            # Display results
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("📊 Form Score", f"{int(ai_result.get('form_score', 0) * 100)}%")
+                            with col2:
+                                risk_level = ai_result.get('injury_risk_level', 'unknown')
+                                risk_colors = {'low': '🟢', 'medium': '🟡', 'high': '🔴'}
+                                risk_icon = risk_colors.get(risk_level, '⚪')
+                                st.metric("⚠️ Injury Risk", f"{risk_icon} {risk_level.title()}")
+                            with col3:
+                                st.metric("🔄 Rep Count", ai_result.get('rep_count', 0))
+                            
+                            # Show detailed feedback
+                            if 'summary' in ai_result:
+                                st.subheader("📝 AI Feedback")
+                                st.write(ai_result['summary'])
+                        else:
+                            st.error(f"❌ AI analysis failed: {ai_result}")
+                else:
+                    st.error(f"❌ Upload failed: {result}")
+
+def show_ai_analysis():
+    st.header("🤖 AI Analysis Pipeline")
+    
+    # Enhanced AI status
+    ai_status = get_ai_status()
+    if ai_status.get('llm_generator') != 'ready':
+        st.error("❌ AI system not ready. Check system status.")
+        return
+    
+    # Get pending sessions
+    sessions_data, success = make_api_request("GET", "/sessions")
+    
+    if success and isinstance(sessions_data, list):
+        pending_sessions = [s for s in sessions_data if s['status'] in ['pending', 'uploaded']]
+        processing_sessions = [s for s in sessions_data if s['status'] == 'processing']
+        
+        # Show processing sessions first
+        if processing_sessions:
+            st.subheader("🔄 Currently Processing")
+            for session in processing_sessions:
+                st.info(f"🔄 Processing: {session['user_name']} - {session['exercise_name']}")
+        
+        if pending_sessions:
+            st.subheader("⏳ Sessions Ready for AI Analysis")
+            
+            for session in pending_sessions:
+                with st.container():
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    
+                    with col1:
+                        st.write(f"**{session['user_name']}** - {session['exercise_name']}")
+                        st.write(f"Reps: {session.get('rep_count', 'N/A')} | Duration: {session.get('duration_seconds', 'N/A')}s")
+                        st.write(f"Status: {session['status']}")
+                    
+                    with col2:
+                        session_id = session['id']
+                        if st.button(f"🤖 Analyze", key=f"analyze_{session_id}"):
+                            with st.spinner("🔄 Running AI analysis..."):
+                                # Use the new endpoint
+                                result, success = make_api_request("POST", f"/process-ai/{session_id}")
+                                
+                                if success:
+                                    st.success("✅ Analysis completed!")
+                                    
+                                    # Enhanced result display
+                                    col_a, col_b, col_c = st.columns(3)
+                                    with col_a:
+                                        form_score = result.get('form_score', 0)
+                                        st.metric("📊 Form Score", f"{int(form_score * 100)}%")
+                                    with col_b:
+                                        st.metric("🔄 Reps", result.get('rep_count', 0))
+                                    with col_c:
+                                        processing_time = result.get('processing_time_seconds', 0)
+                                        st.metric("⏱️ Time", f"{processing_time:.1f}s")
+                                    
+                                    time.sleep(2)
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {result}")
+                    
+                    with col3:
+                        if st.button("📊 Details", key=f"details_{session_id}"):
+                            session_detail, detail_success = make_api_request("GET", f"/sessions/{session_id}")
+                            if detail_success:
+                                st.json(session_detail)
+                    
+                    st.divider()
+        else:
+            st.info("🎉 All sessions have been processed!")
+            
+            # Show recently processed sessions with enhanced info
+            processed_sessions = [s for s in sessions_data if s['status'] == 'processed']
+            if processed_sessions:
+                st.subheader("✅ Recently Processed Sessions")
+                recent_sessions = sorted(processed_sessions, key=lambda x: x['performed_at'], reverse=True)[:5]
+                
+                for session in recent_sessions:
+                    st.success(f"✅ **{session['user_name']}** - {session['exercise_name']} (Processed)")
+
+def show_system_status():
+    """New system status page"""
+    st.header("⚙️ System Status & Configuration")
+    
+    # Get comprehensive status
+    ai_status = get_ai_status()
+    api_info, _ = make_api_request("GET", "/")
+    
+    # API Status
+    st.subheader("🌐 API Status")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("📡 API Version", api_info.get('version', 'unknown'))
+    with col2:
+        st.metric("🌍 Environment", api_info.get('environment', 'unknown'))
+    with col3:
+        features = api_info.get('ai_features', [])
+        st.metric("🎯 AI Features", len(features))
+    
+    # AI System Details
+    if ai_status:
+        st.subheader("🤖 AI System Details")
+        
+        # Status indicators
+        components = {
+            'Pose Analyzer': ai_status.get('pose_analyzer', 'unknown'),
+            'Form Analyzer': ai_status.get('form_analyzer', 'unknown'),
+            'LLM Generator': ai_status.get('llm_generator', 'unknown')
+        }
+        
+        cols = st.columns(len(components))
+        for i, (component, status) in enumerate(components.items()):
+            with cols[i]:
+                if status == 'ready':
+                    st.success(f"✅ {component}")
+                else:
+                    st.error(f"❌ {component}")
+        
+        # LLM Provider Info
+        st.subheader("🧠 LLM Configuration")
+        provider = ai_status.get('llm_provider', 'unknown')
+        
+        if provider == 'kolosal':
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info(f"**Provider:** {provider.title()}")
+                st.info(f"**URL:** {ai_status.get('kolosal_url', 'N/A')}")
+            with col2:
+                st.info(f"**Model:** {ai_status.get('local_model', 'N/A')}")
+                if ai_status.get('kolosal_error'):
+                    st.error(ai_status['kolosal_error'])
+        
+        # Supported Features
+        st.subheader("🎯 Supported Features")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Exercise Types:**")
+            exercises = ai_status.get('supported_exercises', [])
+            for exercise in exercises:
+                st.write(f"• {exercise}")
+        
+        with col2:
+            st.write("**Video Formats:**")
+            formats = ai_status.get('supported_formats', [])
+            for fmt in formats:
+                st.write(f"• {fmt}")
+            
+            max_size = ai_status.get('max_video_size_mb', 0)
+            st.write(f"**Max Video Size:** {max_size}MB")
+    
+    # System Performance (placeholder for future metrics)
+    st.subheader("📈 System Performance")
+    st.info("🚧 Performance metrics will be added in future updates")
+
+# Keep all the existing functions with minor enhancements
 def show_user_management():
     st.header("👥 User Management")
     
@@ -270,8 +587,6 @@ def show_session_management():
                 with col2:
                     duration = st.number_input("Duration (seconds)", min_value=1.0, max_value=300.0, value=30.0, step=0.5)
                 
-                video_path = st.text_input("Video Path (optional)", placeholder="videos/session_001.mp4")
-                
                 submitted = st.form_submit_button("Record Session", type="primary")
                 
                 if submitted:
@@ -279,8 +594,7 @@ def show_session_management():
                         "user_id": user_options[selected_user],
                         "exercise_id": exercise_options[selected_exercise],
                         "rep_count": rep_count,
-                        "duration_seconds": duration,
-                        "video_path": video_path if video_path else f"videos/session_{int(time.time())}.mp4"
+                        "duration_seconds": duration
                     }
                     
                     result, success = make_api_request("POST", "/sessions", data)
@@ -304,8 +618,8 @@ def show_session_management():
                 sessions_df = pd.DataFrame(sessions_data)
                 sessions_df['performed_at'] = pd.to_datetime(sessions_df['performed_at']).dt.strftime('%Y-%m-%d %H:%M')
                 
-                # Add status indicators
-                status_map = {'pending': '⏳', 'processing': '🔄', 'processed': '✅'}
+                # Enhanced status indicators
+                status_map = {'pending': '⏳', 'uploaded': '📤', 'processing': '🔄', 'processed': '✅', 'error': '❌'}
                 sessions_df['status_icon'] = sessions_df['status'].map(status_map)
                 sessions_df['Status'] = sessions_df['status_icon'] + ' ' + sessions_df['status']
                 
@@ -317,62 +631,6 @@ def show_session_management():
                 st.info("No workout sessions found. Record your first session!")
         else:
             st.error("Failed to load sessions")
-
-def show_ai_analysis():
-    st.header("🤖 AI Analysis Pipeline")
-    
-    # Get pending sessions
-    sessions_data, success = make_api_request("GET", "/sessions")
-    
-    if success and isinstance(sessions_data, list):
-        pending_sessions = [s for s in sessions_data if s['status'] in ['pending', 'processing']]
-        
-        if pending_sessions:
-            st.subheader("Sessions Ready for AI Analysis")
-            
-            for session in pending_sessions:
-                with st.container():
-                    col1, col2, col3 = st.columns([3, 1, 1])
-                    
-                    with col1:
-                        st.write(f"**{session['user_name']}** - {session['exercise_name']}")
-                        st.write(f"Reps: {session['rep_count']} | Duration: {session['duration_seconds']}s")
-                        st.write(f"Status: {session['status']}")
-                    
-                    with col2:
-                        session_id = session['id']
-                        if st.button(f"🤖 Analyze", key=f"analyze_{session_id}"):
-                            with st.spinner("Running AI analysis..."):
-                                result, success = make_api_request("POST", f"/process/{session_id}")
-                                
-                                if success:
-                                    st.success("✅ Analysis completed!")
-                                    st.json(result)
-                                    time.sleep(2)
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ {result}")
-                    
-                    with col3:
-                        if st.button("📊 Status", key=f"status_{session_id}"):
-                            status_data, status_success = make_api_request("GET", f"/sessions/{session_id}/process-status")
-                            if status_success:
-                                st.json(status_data)
-                    
-                    st.divider()
-        else:
-            st.info("🎉 All sessions have been processed! Create new sessions to see AI analysis in action.")
-            
-            # Show recently processed sessions
-            processed_sessions = [s for s in sessions_data if s['status'] == 'processed']
-            if processed_sessions:
-                st.subheader("Recently Processed Sessions")
-                recent_sessions = sorted(processed_sessions, key=lambda x: x['performed_at'], reverse=True)[:5]
-                
-                for session in recent_sessions:
-                    st.write(f"✅ **{session['user_name']}** - {session['exercise_name']} (Processed)")
-    else:
-        st.error("Failed to load session data")
 
 def show_feedback_review():
     st.header("📝 Feedback Review")
@@ -394,28 +652,34 @@ def show_feedback_review():
                 if feedback_success and isinstance(feedback_data, list) and feedback_data:
                     for feedback in feedback_data:
                         with st.container():
-                            # Form score visualization
-                            form_score = feedback.get('form_score', 0)
-                            if form_score:
-                                score_percentage = int(form_score * 100)
-                                st.metric("Form Score", f"{score_percentage}%")
+                            # Enhanced visualization
+                            col1, col2, col3 = st.columns(3)
                             
-                            # Injury risk level
-                            risk_level = feedback.get('injury_risk_level', 'unknown')
-                            risk_colors = {'low': '🟢', 'medium': '🟡', 'high': '🔴'}
-                            risk_icon = risk_colors.get(risk_level, '⚪')
-                            st.write(f"**Injury Risk:** {risk_icon} {risk_level.title()}")
+                            with col1:
+                                form_score = feedback.get('form_score', 0)
+                                if form_score:
+                                    score_percentage = int(form_score * 100)
+                                    st.metric("📊 Form Score", f"{score_percentage}%")
                             
-                            # Summary
-                            st.write("**AI Analysis Summary:**")
+                            with col2:
+                                risk_level = feedback.get('injury_risk_level', 'unknown')
+                                risk_colors = {'low': '🟢', 'medium': '🟡', 'high': '🔴'}
+                                risk_icon = risk_colors.get(risk_level, '⚪')
+                                st.metric("⚠️ Injury Risk", f"{risk_icon} {risk_level.title()}")
+                            
+                            with col3:
+                                llm_model = feedback.get('llm_model_used', 'unknown')
+                                st.metric("🤖 AI Model", llm_model.title())
+                            
+                            # Detailed feedback
+                            st.subheader("📝 AI Analysis Summary")
                             st.write(feedback['summary'])
                             
-                            # Recommendations
                             if feedback.get('recommendations'):
-                                st.write("**Recommendations:**")
+                                st.subheader("💡 Recommendations")
                                 st.write(feedback['recommendations'])
                             
-                            st.write(f"*Generated: {feedback['created_at'][:19]}*")
+                            st.caption(f"Generated: {feedback['created_at'][:19]} | Processing time: {feedback.get('processing_time_ms', 0)}ms")
                             st.divider()
                 else:
                     st.info("No feedback found for this session")
