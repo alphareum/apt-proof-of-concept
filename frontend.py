@@ -113,6 +113,10 @@ def main():
         
         st.sidebar.info(f"🌍 Environment: {ai_status.get('environment', 'unknown')}")
     
+    # Initialize session state for page navigation
+    if 'page' not in st.session_state:
+        st.session_state.page = "📊 Dashboard"
+    
     page = st.sidebar.selectbox("Choose a page", [
         "📊 Dashboard",
         "👥 User Management", 
@@ -122,12 +126,17 @@ def main():
         "🤖 AI Analysis",
         "📝 Feedback Review",
         "⚙️ System Status"
-    ])
+    ], index=0)
+    
+    # Update session state
+    st.session_state.page = page
     
     # Check API connection
     api_response, api_ok = make_api_request("GET", "/")
     if not api_ok:
+        st.error("❌ API Connection Failed")
         st.error(api_response)
+        st.info("Make sure your Flask server is running: `python app_with_ai.py`")
         st.stop()
     else:
         version = api_response.get('version', 'unknown')
@@ -229,11 +238,31 @@ def show_video_upload():
     st.header("📹 Video Upload & AI Analysis")
     
     # Get users and exercises for the form
-    users_data, _ = make_api_request("GET", "/users")
-    exercises_data, _ = make_api_request("GET", "/exercises")
+    users_data, users_success = make_api_request("GET", "/users")
+    exercises_data, exercises_success = make_api_request("GET", "/exercises")
+    
+    # Better error handling
+    if not users_success or not isinstance(users_data, list):
+        st.error("❌ Failed to load users. Please check API connection.")
+        return
+    
+    if not exercises_success or not isinstance(exercises_data, list):
+        st.error("❌ Failed to load exercises. Please check API connection.")
+        return
     
     if not users_data or not exercises_data:
         st.warning("⚠️ You need to create at least one user and one exercise before uploading videos!")
+        
+        # Quick links to create data
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("👥 Create User"):
+                st.session_state.page = "👥 User Management"
+                st.rerun()
+        with col2:
+            if st.button("💪 Create Exercise"):
+                st.session_state.page = "💪 Exercise Management"
+                st.rerun()
         return
     
     st.markdown("""
@@ -247,14 +276,30 @@ def show_video_upload():
         col1, col2 = st.columns(2)
         
         with col1:
-            # User selection
-            user_options = {f"{u['name']} ({u['email']})": u['id'] for u in users_data}
-            selected_user = st.selectbox("👤 Select User", list(user_options.keys()))
+            # User selection with safe data handling
+            try:
+                user_options = {f"{u['name']} ({u['email']})": u['id'] for u in users_data if 'name' in u and 'email' in u and 'id' in u}
+                if not user_options:
+                    st.error("❌ No valid users found. Please create users first.")
+                    st.stop()
+                selected_user = st.selectbox("👤 Select User", list(user_options.keys()))
+            except (KeyError, TypeError) as e:
+                st.error(f"❌ Error processing user data: {e}")
+                st.json(users_data)  # Show raw data for debugging
+                st.stop()
         
         with col2:
-            # Exercise selection
-            exercise_options = {f"{e['name']} - {e['primary_muscle']}": e['id'] for e in exercises_data}
-            selected_exercise = st.selectbox("💪 Select Exercise", list(exercise_options.keys()))
+            # Exercise selection with safe data handling
+            try:
+                exercise_options = {f"{e['name']} - {e['primary_muscle']}": e['id'] for e in exercises_data if 'name' in e and 'primary_muscle' in e and 'id' in e}
+                if not exercise_options:
+                    st.error("❌ No valid exercises found. Please create exercises first.")
+                    st.stop()
+                selected_exercise = st.selectbox("💪 Select Exercise", list(exercise_options.keys()))
+            except (KeyError, TypeError) as e:
+                st.error(f"❌ Error processing exercise data: {e}")
+                st.json(exercises_data)  # Show raw data for debugging
+                st.stop()
         
         # Video file upload
         uploaded_file = st.file_uploader(
@@ -263,9 +308,14 @@ def show_video_upload():
             help="Supported formats: MP4, AVI, MOV, MKV (max 100MB)"
         )
         
+        # Add the missing submit button
         submitted = st.form_submit_button("🚀 Upload & Analyze", type="primary")
         
-        if submitted and uploaded_file:
+        if submitted:
+            if uploaded_file is None:
+                st.error("❌ Please select a video file to upload.")
+                return
+            
             user_id = user_options[selected_user]
             exercise_id = exercise_options[selected_exercise]
             
@@ -294,23 +344,54 @@ def show_video_upload():
                             # Display results
                             col1, col2, col3 = st.columns(3)
                             with col1:
-                                st.metric("📊 Form Score", f"{int(ai_result.get('form_score', 0) * 100)}%")
+                                form_score = ai_result.get('form_score', 0)
+                                if form_score:
+                                    st.metric("📊 Form Score", f"{int(form_score * 100)}%")
                             with col2:
                                 risk_level = ai_result.get('injury_risk_level', 'unknown')
                                 risk_colors = {'low': '🟢', 'medium': '🟡', 'high': '🔴'}
                                 risk_icon = risk_colors.get(risk_level, '⚪')
                                 st.metric("⚠️ Injury Risk", f"{risk_icon} {risk_level.title()}")
                             with col3:
-                                st.metric("🔄 Rep Count", ai_result.get('rep_count', 0))
+                                rep_count = ai_result.get('rep_count', 0)
+                                if rep_count:
+                                    st.metric("🔄 Rep Count", rep_count)
                             
                             # Show detailed feedback
-                            if 'summary' in ai_result:
-                                st.subheader("📝 AI Feedback")
-                                st.write(ai_result['summary'])
+                            st.subheader("📝 AI Feedback")
+                            
+                            # Get the actual feedback
+                            feedback_data, feedback_success = make_api_request("GET", f"/sessions/{session_id}/feedback")
+                            if feedback_success and feedback_data:
+                                latest_feedback = feedback_data[-1]  # Get the most recent feedback
+                                st.write("**Summary:**")
+                                st.write(latest_feedback.get('summary', 'No summary available'))
+                                
+                                if latest_feedback.get('recommendations'):
+                                    st.write("**Recommendations:**")
+                                    st.write(latest_feedback['recommendations'])
                         else:
                             st.error(f"❌ AI analysis failed: {ai_result}")
                 else:
                     st.error(f"❌ Upload failed: {result}")
+    
+    # Add a section showing recent uploads
+    st.subheader("📋 Recent Uploads")
+    recent_sessions, _ = make_api_request("GET", "/sessions")
+    
+    if recent_sessions and isinstance(recent_sessions, list):
+        # Filter for recently uploaded sessions
+        uploaded_sessions = [s for s in recent_sessions if s.get('status') in ['uploaded', 'processing', 'processed']]
+        
+        if uploaded_sessions:
+            # Show last 5 uploads
+            for session in uploaded_sessions[-5:]:
+                status_icon = {'uploaded': '📤', 'processing': '🔄', 'processed': '✅'}.get(session['status'], '❓')
+                st.write(f"{status_icon} {session['user_name']} - {session['exercise_name']} ({session['status']})")
+        else:
+            st.info("No recent uploads found.")
+    else:
+        st.info("No session data available.")
 
 def show_ai_analysis():
     st.header("🤖 AI Analysis Pipeline")
