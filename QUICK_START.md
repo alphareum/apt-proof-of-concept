@@ -14,7 +14,7 @@ I've created a separate, clean environment specifically for the fitness app to a
 setup_fitness_app.bat
 ```
 
-**PowerShell (if you prefer):**
+**PowerShell (Enhanced features):**
 ```powershell
 .\setup_fitness_app.ps1
 ```
@@ -24,7 +24,27 @@ setup_fitness_app.bat
 python run_fitness_app.py
 ```
 
-### 🎯 Option 2: Manual Setup
+### 🎯 Option 2: UV Package Manager (Ultra-Fast)
+
+If you have [UV](https://github.com/astral-sh/uv) installed:
+
+```bash
+# Install UV if you don't have it
+pip install uv
+
+# Quick setup and run
+uv venv fitness_env
+source fitness_env/bin/activate  # Windows: fitness_env\Scripts\activate
+uv pip install -r requirements_fitness.txt
+uvx streamlit run fitness_app.py --server.port 8502
+```
+
+**Why UV?**
+- ⚡ 10-100x faster than pip
+- 🔒 Better dependency resolution
+- 🎯 More reliable installations
+
+### 🎯 Option 3: Manual Setup
 
 1. **Create isolated environment:**
    ```bash
@@ -42,8 +62,12 @@ python run_fitness_app.py
 
 3. **Install fitness app dependencies:**
    ```bash
+   # Standard pip
    pip install --upgrade pip
    pip install -r requirements_fitness.txt
+   
+   # OR with UV (faster)
+   uv pip install -r requirements_fitness.txt
    ```
 
 4. **Run the app:**
@@ -92,10 +116,25 @@ python run_fitness_app.py
 
 1. **Make sure you're in the right directory** where the fitness app files are located
 2. **Try the PowerShell script** if the batch file doesn't work
-3. **Check Python version** - needs Python 3.8 or higher
-4. **Clear pip cache** if needed:
+3. **Use UV for faster, more reliable installs**:
    ```bash
+   pip install uv
+   uv pip install -r requirements_fitness.txt
+   ```
+4. **Check Python version** - needs Python 3.8 or higher
+5. **Clear package cache** if needed:
+   ```bash
+   # Standard pip
    pip cache purge
+   
+   # With UV
+   uv cache clean
+   ```
+6. **Try the cleanup scripts** to start fresh:
+   ```bash
+   python cleanup_fitness.py
+   # OR
+   cleanup_fitness.bat
    ```
 
 ## 🔄 To Keep Both Projects

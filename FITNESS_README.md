@@ -32,29 +32,59 @@ A comprehensive Streamlit-based fitness application that provides AI-powered bod
 
 ### Installation & Setup
 
-1. **Clone or download the project files:**
-   ```bash
-   # Make sure you have these files:
-   # - fitness_app.py
-   # - requirements_fitness.txt
-   # - run_fitness_app.py
-   ```
+Choose one of the following installation methods:
 
-2. **Run the demo script:**
-   ```bash
-   python run_fitness_app.py
-   ```
-   
-   The script will:
-   - Install required packages automatically
-   - Start the Streamlit application
-   - Open your browser to `http://localhost:8502`
+#### Option 1: Automated Setup (Recommended)
 
-3. **Manual installation (alternative):**
-   ```bash
-   pip install -r requirements_fitness.txt
-   streamlit run fitness_app.py --server.port 8502
-   ```
+**For Windows users:**
+- **Batch file:** Double-click `setup_fitness_app.bat`
+- **PowerShell:** Right-click `setup_fitness_app.ps1` → "Run with PowerShell"
+
+These scripts will:
+- Create a virtual environment
+- Install all dependencies
+- Start the application automatically
+
+**For all platforms:**
+```bash
+python run_fitness_app.py
+```
+
+#### Option 2: Using UV (Fast Package Manager)
+
+If you have [UV](https://github.com/astral-sh/uv) installed:
+
+```bash
+# Install UV first (if not already installed)
+pip install uv
+
+# Quick setup and run
+uv pip install -r requirements_fitness.txt
+uvx streamlit run fitness_app.py --server.port 8502
+```
+
+#### Option 3: Manual Installation
+
+**Standard pip installation:**
+```bash
+# Create virtual environment (optional but recommended)
+python -m venv fitness_venv
+source fitness_venv/bin/activate  # On Windows: fitness_venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements_fitness.txt
+
+# Run the application
+streamlit run fitness_app.py --server.port 8502
+```
+
+#### Quick Start Files Available:
+- `setup_fitness_app.bat` - Windows batch file for one-click setup
+- `setup_fitness_app.ps1` - PowerShell script with enhanced features
+- `run_fitness_app.py` - Cross-platform Python setup script
+- `cleanup_fitness.bat` / `cleanup_fitness.py` - Environment cleanup utilities
+
+The application will be available at `http://localhost:8502`
 
 ## 🎮 How to Use
 
@@ -91,6 +121,12 @@ A comprehensive Streamlit-based fitness application that provides AI-powered bod
 - **Matplotlib/Seaborn**: Data visualization
 - **Pillow**: Image handling
 
+### Installation Options
+- **UV Package Manager**: Ultra-fast Python package installer and resolver
+- **Standard pip**: Traditional Python package management
+- **Automated scripts**: Windows batch/PowerShell files for one-click setup
+- **Virtual environments**: Isolated Python environments for clean installations
+
 ### Body Fat Analysis Methods
 1. **Navy Method**: Uses body measurements for accurate calculation
 2. **BMI-based Estimation**: Considers age, activity level, and demographics
@@ -126,9 +162,35 @@ A comprehensive Streamlit-based fitness application that provides AI-powered bod
 
 ### Common Issues
 
+**Installation Problems:**
+```bash
+# If using UV and getting errors
+uv pip install --upgrade pip
+uv pip install -r requirements_fitness.txt --no-cache
+
+# If batch/PS1 files don't work
+# Run as administrator or check execution policy:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
 **MediaPipe Installation:**
 ```bash
+# Standard installation
 pip install mediapipe
+
+# With UV (faster)
+uv pip install mediapipe
+```
+
+**Virtual Environment Issues:**
+```bash
+# Clean setup with UV
+uv venv fitness_env
+source fitness_env/bin/activate  # Windows: fitness_env\Scripts\activate
+uv pip install -r requirements_fitness.txt
+
+# Or use the provided cleanup scripts
+python cleanup_fitness.py  # or cleanup_fitness.bat on Windows
 ```
 
 **Camera/Image Upload Issues:**
