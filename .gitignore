@@ -315,3 +315,4 @@ yarn.lock
 
 # Streamlit
 .streamlit/secrets.toml
+fitness_venv/*
