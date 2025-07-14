@@ -1,6 +1,8 @@
 """
 Enhanced data models for AI Fitness Assistant
 Improved data structures with validation and serialization
+
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 from dataclasses import dataclass, field

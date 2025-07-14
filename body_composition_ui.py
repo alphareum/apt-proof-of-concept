@@ -85,7 +85,7 @@ def render_new_analysis():
         
         if primary_image:
             image = Image.open(primary_image)
-            st.image(image, caption="Primary Image", use_column_width=True)
+            st.image(image, caption="Primary Image", use_container_width=True)
     
     with col2:
         st.markdown("**Additional Images** (Optional)")
@@ -265,7 +265,7 @@ def display_analysis_results(result: Dict[str, Any]):
         st.markdown("### 🖼️ Processed Image")
         try:
             processed_image = Image.open(result["processed_image_path"])
-            st.image(processed_image, caption="Analysis Visualization", use_column_width=True)
+            st.image(processed_image, caption="Analysis Visualization", use_container_width=True)
         except Exception as e:
             st.warning(f"Could not display processed image: {e}")
     
@@ -543,8 +543,7 @@ def main():
     """Main function for standalone testing."""
     st.set_page_config(
         page_title="Body Composition Analysis",
-        page_icon="🏋️",
-        layout="wide"
+        page_icon="🏋️"
     )
     
     render_body_composition_analysis()

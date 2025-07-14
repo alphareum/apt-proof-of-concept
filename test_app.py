@@ -12,8 +12,7 @@ import os
 
 st.set_page_config(
     page_title="APT Fitness Assistant - Test",
-    page_icon="🏋️‍♀️",
-    layout="wide"
+    page_icon="🏋️‍♀️"
 )
 
 st.title("🏋️‍♀️ APT Fitness Assistant - Test Version")

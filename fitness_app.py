@@ -10,6 +10,7 @@ A comprehensive fitness application with:
 
 Author: AI Fitness Team
 Version: 3.0.0
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import streamlit as st
@@ -83,6 +84,8 @@ class AppConfig:
     APP_TITLE: str = "AI Fitness Assistant"
     APP_ICON: str = "🏋️‍♀️"
     VERSION: str = "2.0.0"
+    REPOSITORY_URL: str = "https://github.com/alphareum/apt-proof-of-concept"
+    ISSUES_URL: str = "https://github.com/alphareum/apt-proof-of-concept/issues"
     
     # File constraints
     MAX_IMAGE_SIZE_MB: int = 10
@@ -1109,155 +1112,12 @@ def setup_page_config():
     
     st.set_page_config(
         page_title=f"{config.APP_TITLE} v{config.VERSION}",
-        page_icon=config.APP_ICON,
-        layout="wide",
-        initial_sidebar_state="expanded",
-        menu_items={
-            'Get Help': 'https://github.com/your-repo/ai-fitness-assistant',
-            'Report a bug': 'https://github.com/your-repo/ai-fitness-assistant/issues',
-            'About': f"AI Fitness Assistant v{config.VERSION} - Your personal AI fitness coach"
-        }
+        page_icon=config.APP_ICON
     )
 
 def setup_custom_css():
-    """Setup enhanced custom CSS styling."""
-    st.markdown("""
-    <style>
-        .main-header {
-            font-size: 2.5rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-align: center;
-            margin-bottom: 2rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .metric-card {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 1.5rem;
-            border-radius: 1rem;
-            border-left: 4px solid #667eea;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            margin: 0.5rem 0;
-            transition: transform 0.2s ease-in-out;
-        }
-        
-        .metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
-        
-        .analysis-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            margin: 1rem 0;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-        }
-        
-        .exercise-card {
-            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-            padding: 1.2rem;
-            border-radius: 0.75rem;
-            border: 1px solid #e9ecef;
-            margin: 0.5rem 0;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            transition: all 0.2s ease-in-out;
-        }
-        
-        .exercise-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            border-color: #667eea;
-        }
-        
-        .pose-point {
-            color: #28a745;
-            font-weight: bold;
-            padding: 0.25rem 0;
-        }
-        
-        .pose-warning {
-            color: #ffc107;
-            font-weight: bold;
-            padding: 0.25rem 0;
-        }
-        
-        .pose-error {
-            color: #dc3545;
-            font-weight: bold;
-            padding: 0.25rem 0;
-        }
-        
-        .upload-zone {
-            border: 2px dashed #667eea;
-            border-radius: 1rem;
-            padding: 3rem 2rem;
-            text-align: center;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            margin: 1rem 0;
-            transition: all 0.2s ease-in-out;
-        }
-        
-        .upload-zone:hover {
-            border-color: #764ba2;
-            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
-        }
-        
-        .progress-card {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 1rem;
-            margin: 1rem 0;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        
-        .safety-note {
-            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
-            color: white;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin: 0.5rem 0;
-            font-weight: 500;
-        }
-        
-        /* Improved form styling */
-        .stSelectbox > div > div {
-            background-color: #f8f9fa;
-            border-radius: 0.5rem;
-        }
-        
-        .stNumberInput > div > div > input {
-            background-color: #f8f9fa;
-            border-radius: 0.5rem;
-        }
-        
-        /* Hide Streamlit branding */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        
-        /* Loading animation */
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-    """, unsafe_allow_html=True)
+    """Setup basic CSS styling."""
+    pass
 
 if __name__ == "__main__":
     # Initialize application
@@ -1266,13 +1126,9 @@ if __name__ == "__main__":
     
     config = AppConfig()
     
-    # Header with improved styling
-    st.markdown(f'''
-    <div class="main-header">
-        {config.APP_ICON} {config.APP_TITLE} v{config.VERSION}
-        <br><small style="font-size: 1rem; opacity: 0.8;">Your Personal AI Fitness Coach</small>
-    </div>
-    ''', unsafe_allow_html=True)
+    # Header with basic styling
+    st.title(f"{config.APP_ICON} {config.APP_TITLE} v{config.VERSION}")
+    st.subheader("Your Personal AI Fitness Coach")
     
     # Initialize session state
     if 'user_profile' not in st.session_state:

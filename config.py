@@ -1,6 +1,8 @@
 """
 Configuration module for AI Fitness Assistant
 Centralized configuration management with environment variable support
+
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import os
@@ -130,6 +132,8 @@ class AppConfig:
     app_icon: str = "🏋️‍♀️"
     version: str = "2.0.0"
     description: str = "Your Personal AI Fitness Coach"
+    repository_url: str = "https://github.com/alphareum/apt-proof-of-concept"
+    issues_url: str = "https://github.com/alphareum/apt-proof-of-concept/issues"
     
     # Environment
     environment: Environment = Environment.DEVELOPMENT

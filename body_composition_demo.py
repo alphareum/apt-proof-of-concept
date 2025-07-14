@@ -15,8 +15,7 @@ def main():
     """Main demo function."""
     st.set_page_config(
         page_title="Body Composition Analysis Demo",
-        page_icon="🏋️",
-        layout="wide"
+        page_icon="🏋️"
     )
     
     st.title("🏋️ Body Composition Analysis Demo")

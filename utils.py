@@ -1,6 +1,8 @@
 """
 Utility modules for AI Fitness Assistant
 Common utilities, helpers, and decorators
+
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import functools
@@ -604,51 +606,28 @@ class StreamlitUtils:
     @staticmethod
     def show_metric_card(title: str, value: str, delta: Optional[str] = None, 
                         help_text: Optional[str] = None):
-        """Display a styled metric card."""
-        delta_html = f"<div style='color: #28a745; font-size: 0.8rem;'>{delta}</div>" if delta else ""
-        help_html = f"<div style='color: #6c757d; font-size: 0.7rem; margin-top: 0.5rem;'>{help_text}</div>" if help_text else ""
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="font-weight: bold; color: #495057;">{title}</div>
-            <div style="font-size: 1.5rem; font-weight: bold; color: #212529; margin: 0.5rem 0;">{value}</div>
-            {delta_html}
-            {help_html}
-        </div>
-        """, unsafe_allow_html=True)
+        """Display a basic metric card."""
+        st.metric(
+            label=title,
+            value=value,
+            delta=delta,
+            help=help_text
+        )
     
     @staticmethod
     def show_progress_ring(progress: float, title: str = "", size: int = 100):
-        """Display a circular progress indicator."""
+        """Display a basic progress indicator."""
         progress = clamp(progress, 0.0, 1.0)
-        circumference = 2 * 3.14159 * 45  # radius = 45
-        stroke_dasharray = circumference
-        stroke_dashoffset = circumference * (1 - progress)
-        
-        st.markdown(f"""
-        <div style="text-align: center; margin: 1rem 0;">
-            <svg width="{size}" height="{size}" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="45" fill="none" stroke="#e9ecef" stroke-width="10"/>
-                <circle cx="50" cy="50" r="45" fill="none" stroke="#667eea" stroke-width="10"
-                        stroke-dasharray="{stroke_dasharray}" stroke-dashoffset="{stroke_dashoffset}"
-                        stroke-linecap="round" transform="rotate(-90 50 50)"/>
-                <text x="50" y="50" text-anchor="middle" dy="0.3em" font-size="16" font-weight="bold" fill="#212529">
-                    {progress:.0%}
-                </text>
-            </svg>
-            {f"<div style='margin-top: 0.5rem; font-weight: bold;'>{title}</div>" if title else ""}
-        </div>
-        """, unsafe_allow_html=True)
+        if title:
+            st.subheader(title)
+        st.progress(progress)
+        st.write(f"{progress:.0%}")
     
     @staticmethod
     def show_loading_spinner(text: str = "Loading..."):
-        """Display a loading spinner with text."""
-        st.markdown(f"""
-        <div style="text-align: center; margin: 2rem 0;">
-            <div class="loading-spinner"></div>
-            <div style="margin-top: 1rem; color: #6c757d;">{text}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        """Display a loading message."""
+        with st.spinner(text):
+            pass
 
 if __name__ == "__main__":
     # Example usage and testing

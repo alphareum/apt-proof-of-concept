@@ -1,6 +1,8 @@
 """
 Enhanced Exercise Recommendation Engine
 Improved algorithms, personalization, and progression planning
+
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import numpy as np

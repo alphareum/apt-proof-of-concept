@@ -1,6 +1,8 @@
 """
 Enhanced User Interface Components
 Improved Streamlit interface with better UX and modern design
+
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import streamlit as st
@@ -22,328 +24,58 @@ class ModernUI:
     
     @staticmethod
     def setup_page_config():
-        """Setup page configuration with modern styling."""
+        """Setup page configuration."""
         st.set_page_config(
             page_title="AI Fitness Assistant Pro",
-            page_icon="🏋️‍♀️",
-            layout="wide",
-            initial_sidebar_state="expanded",
-            menu_items={
-                'Get Help': 'https://github.com/your-repo/ai-fitness-assistant',
-                'Report a bug': 'https://github.com/your-repo/ai-fitness-assistant/issues',
-                'About': "AI Fitness Assistant Pro - Your intelligent fitness companion"
-            }
+            page_icon="🏋️‍♀️"
         )
     
     @staticmethod
     def inject_custom_css():
-        """Inject enhanced custom CSS for modern appearance."""
-        st.markdown("""
-        <style>
-            /* Main theme colors */
-            :root {
-                --primary-color: #667eea;
-                --secondary-color: #764ba2;
-                --accent-color: #f093fb;
-                --success-color: #28a745;
-                --warning-color: #ffc107;
-                --danger-color: #dc3545;
-                --info-color: #17a2b8;
-                --light-gray: #f8f9fa;
-                --dark-gray: #6c757d;
-            }
-            
-            /* Hide Streamlit branding */
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            
-            /* Main header styling */
-            .main-header {
-                font-size: 3rem;
-                font-weight: 800;
-                background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                text-align: center;
-                margin: 2rem 0;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-                animation: fadeIn 1s ease-in;
-            }
-            
-            /* Card components */
-            .metric-card {
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                padding: 2rem;
-                border-radius: 1.5rem;
-                border: 1px solid #e9ecef;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-                margin: 1rem 0;
-                transition: all 0.3s ease;
-                backdrop-filter: blur(10px);
-            }
-            
-            .metric-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-                border-color: var(--primary-color);
-            }
-            
-            .metric-card h3 {
-                color: var(--primary-color);
-                margin-bottom: 1rem;
-                font-weight: 600;
-            }
-            
-            /* Progress cards */
-            .progress-card {
-                background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
-                color: white;
-                padding: 2rem;
-                border-radius: 1.5rem;
-                margin: 1rem 0;
-                box-shadow: 0 8px 32px rgba(40, 167, 69, 0.3);
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .progress-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-                transform: translateX(-100%);
-                animation: shimmer 2s infinite;
-            }
-            
-            /* Exercise cards */
-            .exercise-card {
-                background: white;
-                padding: 1.5rem;
-                border-radius: 1rem;
-                border-left: 4px solid var(--primary-color);
-                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-                margin: 1rem 0;
-                transition: all 0.3s ease;
-            }
-            
-            .exercise-card:hover {
-                transform: translateX(5px);
-                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-                border-left-color: var(--accent-color);
-            }
-            
-            /* Recommendation cards */
-            .recommendation-card {
-                background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-                color: white;
-                padding: 2rem;
-                border-radius: 1.5rem;
-                margin: 1rem 0;
-                box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
-                position: relative;
-            }
-            
-            /* Status badges */
-            .status-badge {
-                display: inline-block;
-                padding: 0.5rem 1rem;
-                border-radius: 2rem;
-                font-size: 0.875rem;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            
-            .status-beginner { background: var(--info-color); color: white; }
-            .status-intermediate { background: var(--warning-color); color: white; }
-            .status-advanced { background: var(--danger-color); color: white; }
-            
-            /* Form enhancements */
-            .stSelectbox > div > div {
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                border: 2px solid #e9ecef;
-                border-radius: 1rem;
-                transition: all 0.3s ease;
-            }
-            
-            .stSelectbox > div > div:focus-within {
-                border-color: var(--primary-color);
-                box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-            }
-            
-            .stNumberInput > div > div > input {
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                border: 2px solid #e9ecef;
-                border-radius: 1rem;
-                transition: all 0.3s ease;
-            }
-            
-            .stNumberInput > div > div > input:focus {
-                border-color: var(--primary-color);
-                box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-            }
-            
-            /* Button enhancements */
-            .stButton > button {
-                background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-                color: white;
-                border: none;
-                border-radius: 1rem;
-                padding: 0.75rem 2rem;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
-            }
-            
-            .stButton > button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-            }
-            
-            /* File uploader styling */
-            .uploadedFile {
-                border: 2px dashed var(--primary-color);
-                border-radius: 1rem;
-                padding: 2rem;
-                text-align: center;
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                transition: all 0.3s ease;
-            }
-            
-            .uploadedFile:hover {
-                border-color: var(--accent-color);
-                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            }
-            
-            /* Animations */
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            
-            @keyframes shimmer {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(100%); }
-            }
-            
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.7; }
-            }
-            
-            /* Sidebar styling */
-            .css-1d391kg {
-                background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            }
-            
-            /* Tab styling */
-            .stTabs [data-baseweb="tab-list"] {
-                gap: 8px;
-            }
-            
-            .stTabs [data-baseweb="tab"] {
-                height: 3rem;
-                padding: 0 1.5rem;
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                border: 2px solid #e9ecef;
-                border-radius: 1rem;
-                transition: all 0.3s ease;
-            }
-            
-            .stTabs [aria-selected="true"] {
-                background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-                color: white;
-                border-color: var(--primary-color);
-            }
-            
-            /* Success/Error message styling */
-            .element-container .success {
-                background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
-                border-radius: 1rem;
-                padding: 1rem;
-                color: white;
-            }
-            
-            .element-container .error {
-                background: linear-gradient(135deg, var(--danger-color) 0%, #e55353 100%);
-                border-radius: 1rem;
-                padding: 1rem;
-                color: white;
-            }
-            
-            /* Loading spinner */
-            .loading-spinner {
-                border: 4px solid #f3f3f3;
-                border-top: 4px solid var(--primary-color);
-                border-radius: 50%;
-                width: 50px;
-                height: 50px;
-                animation: spin 1s linear infinite;
-                margin: 20px auto;
-            }
-            
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        </style>
-        """, unsafe_allow_html=True)
+        """Inject basic CSS."""
+        pass
     
     @staticmethod
     def render_header():
         """Render the main application header."""
-        st.markdown("""
-        <div class="main-header">
-            🏋️‍♀️ AI Fitness Assistant Pro
-            <br><small style="font-size: 1.2rem; opacity: 0.8;">Your Intelligent Fitness Companion</small>
-        </div>
-        """, unsafe_allow_html=True)
+        st.title("🏋️‍♀️ AI Fitness Assistant Pro")
+        st.subheader("Your Intelligent Fitness Companion")
     
     @staticmethod
     def render_metric_card(title: str, value: str, subtitle: str = "", icon: str = "") -> None:
-        """Render a metric card with modern styling."""
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>{icon} {title}</h3>
-            <h2 style="margin: 0; color: var(--secondary-color);">{value}</h2>
-            {f'<p style="margin: 0.5rem 0 0 0; color: var(--dark-gray);">{subtitle}</p>' if subtitle else ''}
-        </div>
-        """, unsafe_allow_html=True)
+        """Render a metric card with basic styling."""
+        st.metric(
+            label=f"{icon} {title}" if icon else title,
+            value=value,
+            help=subtitle if subtitle else None
+        )
     
     @staticmethod
     def render_progress_card(title: str, progress: float, target: str = "") -> None:
-        """Render a progress card with animation."""
-        st.markdown(f"""
-        <div class="progress-card">
-            <h3 style="margin: 0 0 1rem 0;">{title}</h3>
-            <div style="background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; overflow: hidden;">
-                <div style="background: white; height: 100%; width: {progress}%; transition: width 1s ease;"></div>
-            </div>
-            <p style="margin: 0.5rem 0 0 0;">{progress:.1f}% {target}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        """Render a progress card with basic styling."""
+        st.subheader(title)
+        st.progress(progress / 100 if progress > 1 else progress)
+        if target:
+            st.write(f"{progress:.1f}% {target}")
     
+    @staticmethod
     @staticmethod
     def render_exercise_card(exercise_name: str, details: Dict[str, Any]) -> None:
         """Render an exercise card with details."""
-        st.markdown(f"""
-        <div class="exercise-card">
-            <h4 style="margin: 0 0 1rem 0; color: var(--primary-color);">{exercise_name}</h4>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                {f'<div><strong>Sets:</strong> {details.get("sets", "N/A")}</div>' if details.get("sets") else ''}
-                {f'<div><strong>Reps:</strong> {details.get("reps", "N/A")}</div>' if details.get("reps") else ''}
-                {f'<div><strong>Duration:</strong> {details.get("duration", "N/A")}</div>' if details.get("duration") else ''}
-                {f'<div><strong>Rest:</strong> {details.get("rest", "N/A")}</div>' if details.get("rest") else ''}
-            </div>
-            {f'<p style="margin-top: 1rem; font-style: italic;">{details.get("notes", "")}</p>' if details.get("notes") else ''}
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader(exercise_name)
+        
+        cols = st.columns(4)
+        if details.get("sets"):
+            cols[0].write(f"**Sets:** {details['sets']}")
+        if details.get("reps"):
+            cols[1].write(f"**Reps:** {details['reps']}")
+        if details.get("duration"):
+            cols[2].write(f"**Duration:** {details['duration']}")
+        if details.get("rest"):
+            cols[3].write(f"**Rest:** {details['rest']}")
+        
+        if details.get("notes"):
+            st.write(f"*{details['notes']}*")
 
 class UserProfileManager:
     """Manage user profile creation and updates."""
@@ -364,6 +96,7 @@ class UserProfileManager:
                 min_value=18, 
                 max_value=100, 
                 value=25,
+                step=1,
                 help="Your current age in years"
             )
             
@@ -441,6 +174,7 @@ class UserProfileManager:
                 min_value=0,
                 max_value=50,
                 value=0,
+                step=1,
                 help="How many years you've been training (0 for beginner)"
             )
         

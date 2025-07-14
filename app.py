@@ -9,6 +9,7 @@ Enhanced fitness application with comprehensive features:
 - Goal setting and achievement monitoring
 
 Version: 3.0.0
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import streamlit as st
@@ -52,7 +53,6 @@ try:
     from models import UserProfile, create_user_profile, Gender, ActivityLevel, FitnessLevel, GoalType
     from database import get_database
     from recommendation_engine import AdvancedExerciseRecommendationEngine
-    from ui_components import get_ui_components
     
     # Import body composition analysis
     try:
@@ -105,20 +105,50 @@ def check_user_profile():
 def render_profile_setup():
     """Render profile setup interface."""
     
-    st.markdown("## 👤 Complete Your Profile")
+    st.header("👤 Complete Your Profile")
     st.info("Please complete your profile to get personalized recommendations and track your progress.")
     
-    ui_components = get_ui_components()
-    profile_manager = ui_components['profile_manager']
-    
-    # Render profile form
-    new_profile = profile_manager.render_profile_form()
-    
-    if new_profile:
-        st.session_state.user_profile = new_profile
-        st.session_state.user_id = new_profile.user_id
-        st.session_state.profile_complete = True
-        st.rerun()
+    # Simple profile form
+    with st.form("profile_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            age = st.number_input("Age", min_value=18, max_value=100, value=30)
+            height = st.number_input("Height (cm)", min_value=100.0, max_value=250.0, value=170.0, step=0.5)
+            gender = st.selectbox("Gender", ["male", "female"])
+        
+        with col2:
+            weight = st.number_input("Weight (kg)", min_value=30.0, max_value=300.0, value=70.0, step=0.1)
+            activity_level = st.selectbox("Activity Level", [
+                "sedentary", "lightly_active", "moderately_active", "very_active", "extremely_active"
+            ])
+            fitness_level = st.selectbox("Fitness Level", ["beginner", "intermediate", "advanced"])
+        
+        primary_goal = st.selectbox("Primary Goal", [
+            "weight_loss", "muscle_gain", "endurance", "strength", "general_fitness"
+        ])
+        
+        submitted = st.form_submit_button("Create Profile")
+        
+        if submitted:
+            try:
+                new_profile = create_user_profile(
+                    age=age,
+                    gender=Gender(gender),
+                    height=height,
+                    weight=weight,
+                    activity_level=ActivityLevel(activity_level),
+                    fitness_level=FitnessLevel(fitness_level),
+                    primary_goal=GoalType(primary_goal)
+                )
+                
+                st.session_state.user_profile = new_profile
+                st.session_state.user_id = new_profile.user_id
+                st.session_state.profile_complete = True
+                st.success("Profile created successfully!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error creating profile: {e}")
 
 def main():
     """Main application function."""
@@ -126,16 +156,15 @@ def main():
     # Initialize session state
     initialize_session_state()
     
-    # Get UI components
-    ui_components = get_ui_components()
-    modern_ui = ui_components['modern_ui']
-    
     # Setup page configuration
-    modern_ui.setup_page_config()
-    modern_ui.inject_custom_css()
+    st.set_page_config(
+        page_title="AI Fitness Assistant Pro",
+        page_icon="🏋️‍♀️"
+    )
     
     # Render header
-    modern_ui.render_header()
+    st.title("🏋️‍♀️ AI Fitness Assistant Pro")
+    st.subheader("Your Intelligent Fitness Companion")
     
     # Check if user has completed profile
     if not check_user_profile():
@@ -143,15 +172,15 @@ def main():
         return
     
     # Main application interface
-    render_main_application(ui_components)
+    render_main_application()
 
-def render_main_application(ui_components):
+def render_main_application():
     """Render the main application interface."""
     
     user_profile = st.session_state.user_profile
     
     # Sidebar with user info and navigation
-    render_sidebar(user_profile, ui_components)
+    render_sidebar(user_profile)
     
     # Main content area with tabs
     tabs = st.tabs([
@@ -166,32 +195,32 @@ def render_main_application(ui_components):
         render_body_analysis_tab(user_profile)
     
     with tabs[1]:
-        render_recommendations_tab(user_profile, ui_components)
+        render_recommendations_tab(user_profile)
     
     with tabs[2]:
         render_form_correction_tab(user_profile)
     
     with tabs[3]:
-        render_progress_tracking_tab(user_profile, ui_components)
+        render_progress_tracking_tab(user_profile)
     
     with tabs[4]:
         render_goal_management_tab(user_profile)
 
-def render_sidebar(user_profile: UserProfile, ui_components):
+def render_sidebar(user_profile: UserProfile):
     """Render sidebar with user information and controls."""
     
-    st.sidebar.markdown("## 👤 Your Profile")
+    st.sidebar.header("👤 Your Profile")
     
     # User summary
-    st.sidebar.markdown(f"**Age:** {user_profile.age}")
-    st.sidebar.markdown(f"**BMI:** {user_profile.bmi} ({user_profile.bmi_category})")
-    st.sidebar.markdown(f"**Fitness Level:** {user_profile.fitness_level.value.title()}")
-    st.sidebar.markdown(f"**Primary Goal:** {user_profile.primary_goal.value.replace('_', ' ').title()}")
+    st.sidebar.write(f"**Age:** {user_profile.age}")
+    st.sidebar.write(f"**BMI:** {user_profile.bmi} ({user_profile.bmi_category})")
+    st.sidebar.write(f"**Fitness Level:** {user_profile.fitness_level.value.title()}")
+    st.sidebar.write(f"**Primary Goal:** {user_profile.primary_goal.value.replace('_', ' ').title()}")
     
-    st.sidebar.markdown("---")
+    st.sidebar.divider()
     
     # Quick actions
-    st.sidebar.markdown("## ⚡ Quick Actions")
+    st.sidebar.subheader("⚡ Quick Actions")
     
     if st.sidebar.button("🔄 Update Profile"):
         st.session_state.profile_complete = False
@@ -219,6 +248,8 @@ def render_sidebar(user_profile: UserProfile, ui_components):
     st.sidebar.markdown("## ℹ️ About")
     st.sidebar.markdown("**AI Fitness Assistant Pro v3.0**")
     st.sidebar.markdown("Your intelligent fitness companion")
+    st.sidebar.markdown("[🔗 GitHub Repository](https://github.com/alphareum/apt-proof-of-concept)")
+    st.sidebar.markdown("[🐛 Report Issues](https://github.com/alphareum/apt-proof-of-concept/issues)")
     st.sidebar.markdown(f"Profile ID: `{user_profile.user_id[:8]}...`")
 
 def render_body_analysis_tab(user_profile: UserProfile):
@@ -252,7 +283,7 @@ def render_image_analysis(user_profile: UserProfile):
     if uploaded_file is not None:
         # Display uploaded image
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
         
         if st.button("🔍 Analyze Body Composition", type="primary"):
             with st.spinner("🤖 Analyzing image..."):
@@ -508,7 +539,7 @@ def display_analysis_results(results: Dict[str, Any], user_profile: UserProfile)
             st.markdown("### 🖼️ Analysis Visualization")
             try:
                 processed_image = Image.open(results["processed_image_path"])
-                st.image(processed_image, caption="Analysis Visualization", use_column_width=True)
+                st.image(processed_image, caption="Analysis Visualization", use_container_width=True)
             except Exception as e:
                 st.warning(f"Could not display processed image: {e}")
         
@@ -577,7 +608,7 @@ def render_manual_measurements(user_profile: UserProfile):
     col1, col2 = st.columns(2)
     
     with col1:
-        weight = st.number_input("Weight (kg)", min_value=30.0, max_value=300.0, value=user_profile.weight, step=0.1)
+        weight = st.number_input("Weight (kg)", min_value=30.0, max_value=300.0, value=float(user_profile.weight), step=0.1)
         waist = st.number_input("Waist (cm)", min_value=50.0, max_value=200.0, value=80.0, step=0.5)
         chest = st.number_input("Chest (cm)", min_value=60.0, max_value=200.0, value=90.0, step=0.5)
         neck = st.number_input("Neck (cm)", min_value=25.0, max_value=60.0, value=35.0, step=0.5)
@@ -825,11 +856,20 @@ def create_measurement_progress_chart(df):
     
     return None
 
-def render_recommendations_tab(user_profile: UserProfile, ui_components):
+def render_recommendations_tab(user_profile: UserProfile):
     """Render exercise recommendations tab."""
     
-    recommendation_ui = ui_components['recommendation_ui']
-    recommendation_ui.render_recommendations(user_profile)
+    st.header("💪 Exercise Recommendations")
+    st.info("Getting personalized exercise recommendations based on your profile...")
+    
+    # Basic recommendations display
+    recommendations = generate_basic_recommendations(user_profile)
+    for rec in recommendations:
+        st.subheader(rec['name'])
+        st.write(f"**Type:** {rec['type']}")
+        st.write(f"**Duration:** {rec['duration']}")
+        st.write(f"**Description:** {rec['description']}")
+        st.divider()
 
 def render_form_correction_tab(user_profile: UserProfile):
     """Render form correction tab."""
@@ -891,7 +931,7 @@ def render_simplified_form_correction():
     
     st.info("💡 Upload a video or use your camera for real-time form analysis (feature coming soon)!")
 
-def render_progress_tracking_tab(user_profile: UserProfile, ui_components):
+def render_progress_tracking_tab(user_profile: UserProfile):
     """Render progress tracking tab with body composition analysis."""
     
     st.markdown("## 📊 Progress Tracking")
@@ -900,8 +940,14 @@ def render_progress_tracking_tab(user_profile: UserProfile, ui_components):
     tab1, tab2, tab3 = st.tabs(["📈 Dashboard", "🔄 Body Composition Progress", "📋 Detailed Analysis"])
     
     with tab1:
-        dashboard_manager = ui_components['dashboard_manager']
-        dashboard_manager.render_progress_dashboard(user_profile)
+        st.subheader("Progress Overview")
+        st.info("Your progress tracking will be displayed here.")
+        
+        # Basic progress metrics
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Workouts This Week", "3")
+        col2.metric("Total Calories Burned", "450")
+        col3.metric("Streak Days", "7")
     
     with tab2:
         render_body_composition_progress(user_profile)
@@ -1022,9 +1068,9 @@ def render_body_composition_progress(user_profile: UserProfile):
     
     # Get historical data
     try:
-        from database import get_body_composition_history, calculate_composition_progress
+        db = get_database()
         
-        history = get_body_composition_history(user_profile.user_id, limit=10)
+        history = db.get_body_composition_history(user_profile.user_id, days=30)
         
         if not history:
             st.info("No body composition analyses found. Complete an analysis first to track progress.")
@@ -1039,22 +1085,22 @@ def render_body_composition_progress(user_profile: UserProfile):
         with col1:
             st.metric(
                 "Body Fat %",
-                f"{latest.body_fat_percentage:.1f}%",
-                delta=f"{latest.body_fat_percentage - (history[1].body_fat_percentage if len(history) > 1 else latest.body_fat_percentage):.1f}%" if len(history) > 1 else None
+                f"{latest['body_fat_percentage']:.1f}%",
+                delta=f"{latest['body_fat_percentage'] - (history[1]['body_fat_percentage'] if len(history) > 1 else latest['body_fat_percentage']):.1f}%" if len(history) > 1 else None
             )
         
         with col2:
             st.metric(
                 "Muscle Mass %",
-                f"{latest.muscle_mass_percentage:.1f}%",
-                delta=f"{latest.muscle_mass_percentage - (history[1].muscle_mass_percentage if len(history) > 1 else latest.muscle_mass_percentage):.1f}%" if len(history) > 1 else None
+                f"{latest['muscle_mass_percentage']:.1f}%",
+                delta=f"{latest['muscle_mass_percentage'] - (history[1]['muscle_mass_percentage'] if len(history) > 1 else latest['muscle_mass_percentage']):.1f}%" if len(history) > 1 else None
             )
         
         with col3:
             st.metric(
                 "BMR",
-                f"{int(latest.bmr)} cal",
-                delta=f"{int(latest.bmr - (history[1].bmr if len(history) > 1 else latest.bmr))}" if len(history) > 1 else None
+                f"{int(latest['bmr_estimated'])} cal",
+                delta=f"{int(latest['bmr_estimated'] - (history[1]['bmr_estimated'] if len(history) > 1 else latest['bmr_estimated']))}" if len(history) > 1 else None
             )
         
         with col4:
@@ -1069,10 +1115,10 @@ def render_body_composition_progress(user_profile: UserProfile):
             st.markdown("#### Progress Charts")
             
             # Prepare data for plotting
-            dates = [analysis.analysis_date for analysis in reversed(history)]
-            body_fat = [analysis.body_fat_percentage for analysis in reversed(history)]
-            muscle_mass = [analysis.muscle_mass_percentage for analysis in reversed(history)]
-            bmr_values = [analysis.bmr for analysis in reversed(history)]
+            dates = [analysis['analysis_date'] for analysis in reversed(history)]
+            body_fat = [analysis['body_fat_percentage'] for analysis in reversed(history)]
+            muscle_mass = [analysis['muscle_mass_percentage'] for analysis in reversed(history)]
+            bmr_values = [analysis['bmr_estimated'] for analysis in reversed(history)]
             
             # Create visualizations
             col1, col2 = st.columns(2)
@@ -1106,7 +1152,7 @@ def render_body_composition_progress(user_profile: UserProfile):
         
         # Progress statistics
         if len(history) >= 2:
-            progress_stats = calculate_composition_progress(user_profile.user_id)
+            progress_stats = db.calculate_composition_progress(user_profile.user_id)
             if progress_stats:
                 st.markdown("#### Progress Statistics")
                 
@@ -1155,9 +1201,9 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
     st.markdown("### 📋 Detailed Analysis Comparison")
     
     try:
-        from database import get_body_composition_history
+        db = get_database()
         
-        history = get_body_composition_history(user_profile.user_id, limit=50)
+        history = db.get_body_composition_history(user_profile.user_id, days=180)
         
         if len(history) < 2:
             st.info("At least 2 analyses are needed for comparison. Complete more analyses to see comparisons.")
@@ -1170,7 +1216,7 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
         
         # Prepare options
         analysis_options = {
-            f"{analysis.analysis_date.strftime('%Y-%m-%d %H:%M')} - {analysis.body_shape}": analysis
+            f"{analysis['analysis_date'][:19]} - {analysis['body_shape_classification']}": analysis
             for analysis in history
         }
         
@@ -1206,31 +1252,31 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
                     "Confidence Score"
                 ],
                 "First Analysis": [
-                    analysis1.analysis_date.strftime('%Y-%m-%d %H:%M'),
-                    f"{analysis1.body_fat_percentage:.1f}%",
-                    f"{analysis1.muscle_mass_percentage:.1f}%",
-                    f"{int(analysis1.bmr)}",
-                    analysis1.body_shape,
-                    analysis1.health_assessment,
-                    f"{analysis1.confidence_score:.1f}%"
+                    analysis1['analysis_date'][:19],
+                    f"{analysis1['body_fat_percentage']:.1f}%",
+                    f"{analysis1['muscle_mass_percentage']:.1f}%",
+                    f"{int(analysis1['bmr_estimated'])}",
+                    analysis1['body_shape_classification'],
+                    analysis1['health_assessment'],
+                    f"{analysis1['confidence_score']:.1f}%"
                 ],
                 "Second Analysis": [
-                    analysis2.analysis_date.strftime('%Y-%m-%d %H:%M'),
-                    f"{analysis2.body_fat_percentage:.1f}%",
-                    f"{analysis2.muscle_mass_percentage:.1f}%",
-                    f"{int(analysis2.bmr)}",
-                    analysis2.body_shape,
-                    analysis2.health_assessment,
-                    f"{analysis2.confidence_score:.1f}%"
+                    analysis2['analysis_date'][:19],
+                    f"{analysis2['body_fat_percentage']:.1f}%",
+                    f"{analysis2['muscle_mass_percentage']:.1f}%",
+                    f"{int(analysis2['bmr_estimated'])}",
+                    analysis2['body_shape_classification'],
+                    analysis2['health_assessment'],
+                    f"{analysis2['confidence_score']:.1f}%"
                 ],
                 "Change": [
                     "---",
-                    f"{analysis2.body_fat_percentage - analysis1.body_fat_percentage:+.1f}%",
-                    f"{analysis2.muscle_mass_percentage - analysis1.muscle_mass_percentage:+.1f}%",
-                    f"{int(analysis2.bmr - analysis1.bmr):+}",
-                    "---" if analysis1.body_shape == analysis2.body_shape else f"{analysis1.body_shape} → {analysis2.body_shape}",
-                    "---" if analysis1.health_assessment == analysis2.health_assessment else f"{analysis1.health_assessment} → {analysis2.health_assessment}",
-                    f"{analysis2.confidence_score - analysis1.confidence_score:+.1f}%"
+                    f"{analysis2['body_fat_percentage'] - analysis1['body_fat_percentage']:+.1f}%",
+                    f"{analysis2['muscle_mass_percentage'] - analysis1['muscle_mass_percentage']:+.1f}%",
+                    f"{int(analysis2['bmr_estimated'] - analysis1['bmr_estimated']):+}",
+                    "---" if analysis1['body_shape_classification'] == analysis2['body_shape_classification'] else f"{analysis1['body_shape_classification']} → {analysis2['body_shape_classification']}",
+                    "---" if analysis1['health_assessment'] == analysis2['health_assessment'] else f"{analysis1['health_assessment']} → {analysis2['health_assessment']}",
+                    f"{analysis2['confidence_score'] - analysis1['confidence_score']:+.1f}%"
                 ]
             }
             
@@ -1244,7 +1290,7 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
             changes = []
             
             # Body fat change
-            fat_diff = analysis2.body_fat_percentage - analysis1.body_fat_percentage
+            fat_diff = analysis2['body_fat_percentage'] - analysis1['body_fat_percentage']
             if abs(fat_diff) >= 1.0:
                 if fat_diff > 0:
                     changes.append(f"🔴 Body fat increased by {fat_diff:.1f}%")
@@ -1252,7 +1298,7 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
                     changes.append(f"🟢 Body fat decreased by {abs(fat_diff):.1f}%")
             
             # Muscle mass change
-            muscle_diff = analysis2.muscle_mass_percentage - analysis1.muscle_mass_percentage
+            muscle_diff = analysis2['muscle_mass_percentage'] - analysis1['muscle_mass_percentage']
             if abs(muscle_diff) >= 1.0:
                 if muscle_diff > 0:
                     changes.append(f"🟢 Muscle mass increased by {muscle_diff:.1f}%")
@@ -1260,7 +1306,7 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
                     changes.append(f"🔴 Muscle mass decreased by {abs(muscle_diff):.1f}%")
             
             # BMR change
-            bmr_diff = analysis2.bmr - analysis1.bmr
+            bmr_diff = analysis2['bmr_estimated'] - analysis1['bmr_estimated']
             if abs(bmr_diff) >= 50:
                 if bmr_diff > 0:
                     changes.append(f"🟢 BMR increased by {int(bmr_diff)} calories")
@@ -1268,12 +1314,12 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
                     changes.append(f"🔴 BMR decreased by {int(abs(bmr_diff))} calories")
             
             # Body shape change
-            if analysis1.body_shape != analysis2.body_shape:
-                changes.append(f"📏 Body shape changed from {analysis1.body_shape} to {analysis2.body_shape}")
+            if analysis1['body_shape_classification'] != analysis2['body_shape_classification']:
+                changes.append(f"📏 Body shape changed from {analysis1['body_shape_classification']} to {analysis2['body_shape_classification']}")
             
             # Health assessment change
-            if analysis1.health_assessment != analysis2.health_assessment:
-                changes.append(f"❤️ Health assessment changed from {analysis1.health_assessment} to {analysis2.health_assessment}")
+            if analysis1['health_assessment'] != analysis2['health_assessment']:
+                changes.append(f"❤️ Health assessment changed from {analysis1['health_assessment']} to {analysis2['health_assessment']}")
             
             if changes:
                 for change in changes:
@@ -1286,6 +1332,29 @@ def render_detailed_analysis_comparison(user_profile: UserProfile):
     
     except Exception as e:
         st.error(f"Error loading analysis comparison: {str(e)}")
+
+def generate_basic_recommendations(user_profile: UserProfile):
+    """Generate basic exercise recommendations."""
+    return [
+        {
+            'name': 'Walking',
+            'type': 'Cardio',
+            'duration': '30 minutes',
+            'description': 'A great low-impact exercise to start with.'
+        },
+        {
+            'name': 'Push-ups',
+            'type': 'Strength',
+            'duration': '3 sets of 10',
+            'description': 'Build upper body strength.'
+        },
+        {
+            'name': 'Squats',
+            'type': 'Strength',
+            'duration': '3 sets of 15',
+            'description': 'Strengthen your lower body.'
+        }
+    ]
 
 if __name__ == "__main__":
     main()

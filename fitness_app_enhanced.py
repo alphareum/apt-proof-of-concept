@@ -4,6 +4,7 @@ Simplified version that integrates all improvements while maintaining functional
 
 Author: AI Fitness Team
 Version: 3.0.0
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import streamlit as st
@@ -33,71 +34,8 @@ def get_app_config():
 
 # Enhanced styling
 def inject_custom_css():
-    """Inject custom CSS for modern UI."""
-    st.markdown("""
-    <style>
-        /* Modern styling */
-        .main-header {
-            font-size: 2.5rem;
-            font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        
-        .metric-card {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 1.5rem;
-            border-radius: 1rem;
-            border-left: 4px solid #667eea;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            margin: 0.5rem 0;
-            transition: transform 0.2s ease-in-out;
-        }
-        
-        .metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
-        
-        .recommendation-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 1rem;
-            margin: 1rem 0;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-        
-        .exercise-card {
-            background: white;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            border: 1px solid #e9ecef;
-            margin: 0.5rem 0;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-        
-        .status-beginner { background: #17a2b8; color: white; }
-        .status-intermediate { background: #ffc107; color: white; }
-        .status-advanced { background: #dc3545; color: white; }
-        
-        /* Hide Streamlit branding */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
+    """Inject basic CSS for simple UI."""
+    pass
 
 # Enhanced Data Models
 class EnhancedUserProfile:
@@ -747,17 +685,15 @@ def main():
     # Page configuration
     st.set_page_config(
         page_title="AI Fitness Assistant Pro",
-        page_icon="🏋️‍♀️",
-        layout="wide",
-        initial_sidebar_state="expanded"
+        page_icon="🏋️‍♀️"
     )
     
-    # Apply custom styling
+    # Apply basic styling
     inject_custom_css()
     
     # Header
-    st.markdown('<div class="main-header">🏋️‍♀️ AI Fitness Assistant Pro</div>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; font-size: 1.2rem; color: #6c757d;">Your Intelligent Fitness Companion v3.0</p>', unsafe_allow_html=True)
+    st.title("🏋️‍♀️ AI Fitness Assistant Pro")
+    st.subheader("Your Intelligent Fitness Companion v3.0")
     
     # Initialize session state
     if 'user_profile' not in st.session_state:
@@ -779,7 +715,7 @@ def render_profile_setup():
         col1, col2 = st.columns(2)
         
         with col1:
-            age = st.number_input("Age", min_value=18, max_value=100, value=25)
+            age = st.number_input("Age", min_value=18, max_value=100, value=25, step=1)
             weight = st.number_input("Weight (kg)", min_value=30.0, max_value=300.0, value=70.0, step=0.5)
             activity_level = st.selectbox(
                 "Activity Level",
@@ -848,7 +784,7 @@ def render_main_app():
     render_sidebar(user_profile)
     
     # Main tabs
-    tabs = st.tabs(["📊 Dashboard", "💪 Recommendations", "📈 Progress", "�️ Body Analysis", "�🎯 Goals", "⚙️ Settings"])
+    tabs = st.tabs(["📊 Dashboard", "💪 Recommendations", "📈 Progress", "🏋️‍♀️ Body Analysis"])
     
     with tabs[0]:
         render_dashboard(user_profile)
@@ -861,23 +797,17 @@ def render_main_app():
     
     with tabs[3]:
         render_body_composition_tab(user_profile)
-    
-    with tabs[4]:
-        render_goals(user_profile)
-    
-    with tabs[5]:
-        render_settings(user_profile)
 
 def render_sidebar(user_profile: EnhancedUserProfile):
     """Render sidebar with user info."""
     
-    st.sidebar.markdown("## 👤 Your Profile")
-    st.sidebar.markdown(f"**Age:** {user_profile.age}")
-    st.sidebar.markdown(f"**BMI:** {user_profile.bmi} ({user_profile.bmi_category})")
-    st.sidebar.markdown(f"**Fitness Level:** {user_profile.fitness_level.title()}")
-    st.sidebar.markdown(f"**Primary Goal:** {user_profile.primary_goal.replace('_', ' ').title()}")
+    st.sidebar.header("👤 Your Profile")
+    st.sidebar.write(f"**Age:** {user_profile.age}")
+    st.sidebar.write(f"**BMI:** {user_profile.bmi} ({user_profile.bmi_category})")
+    st.sidebar.write(f"**Fitness Level:** {user_profile.fitness_level.title()}")
+    st.sidebar.write(f"**Primary Goal:** {user_profile.primary_goal.replace('_', ' ').title()}")
     
-    st.sidebar.markdown("---")
+    st.sidebar.divider()
     
     # Quick stats
     db = get_database()
@@ -907,31 +837,19 @@ def render_dashboard(user_profile: EnhancedUserProfile):
     measurements = db.get_measurements(user_profile.user_id)
     
     with col1:
-        st.markdown(
-            f'<div class="metric-card"><h3>📈 BMI</h3><h2>{user_profile.bmi}</h2><p>{user_profile.bmi_category}</p></div>',
-            unsafe_allow_html=True
-        )
+        st.metric("📈 BMI", f"{user_profile.bmi}", user_profile.bmi_category)
     
     with col2:
-        st.markdown(
-            f'<div class="metric-card"><h3>🏃‍♀️ Workouts</h3><h2>{len(workouts)}</h2><p>Total completed</p></div>',
-            unsafe_allow_html=True
-        )
+        st.metric("🏃‍♀️ Workouts", len(workouts), "Total completed")
     
     with col3:
         engine = SmartRecommendationEngine()
         bmr = engine._calculate_bmr(user_profile)
-        st.markdown(
-            f'<div class="metric-card"><h3>🔥 BMR</h3><h2>{int(bmr)}</h2><p>Calories/day</p></div>',
-            unsafe_allow_html=True
-        )
+        st.metric("🔥 BMR", f"{int(bmr)}", "Calories/day")
     
     with col4:
         daily_calories = engine._calculate_daily_calories(user_profile)
-        st.markdown(
-            f'<div class="metric-card"><h3>🍎 Daily Needs</h3><h2>{int(daily_calories)}</h2><p>Total calories</p></div>',
-            unsafe_allow_html=True
-        )
+        st.metric("🍎 Daily Needs", f"{int(daily_calories)}", "Total calories")
     
     # Recent activity
     st.markdown("### 📅 Recent Activity")

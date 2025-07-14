@@ -1,6 +1,8 @@
 """
 Database layer for AI Fitness Assistant
 Handles data persistence, user profiles, and exercise history
+
+Repository: https://github.com/alphareum/apt-proof-of-concept
 """
 
 import json
