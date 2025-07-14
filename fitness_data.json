@@ -1,0 +1,40 @@
+{
+  "users": {
+    "761863d9-75b5-4e5d-8d73-98c9ae0dbef4": {
+      "user_id": "761863d9-75b5-4e5d-8d73-98c9ae0dbef4",
+      "age": 25,
+      "gender": "other",
+      "weight": 70.0,
+      "height": 170.0,
+      "activity_level": "moderately_active",
+      "fitness_level": "beginner",
+      "primary_goal": "general_fitness",
+      "available_time": 30,
+      "workout_days_per_week": 3,
+      "available_equipment": [],
+      "injuries": [],
+      "medical_conditions": [],
+      "created_at": "2025-07-13T18:44:32.581384",
+      "updated_at": "2025-07-13T18:44:32.581384"
+    },
+    "3f34e23a-f945-48fd-bc50-b447217155f8": {
+      "user_id": "3f34e23a-f945-48fd-bc50-b447217155f8",
+      "age": 25,
+      "gender": "other",
+      "weight": 70.0,
+      "height": 170.0,
+      "activity_level": "moderately_active",
+      "fitness_level": "beginner",
+      "primary_goal": "general_fitness",
+      "available_time": 30,
+      "workout_days_per_week": 3,
+      "available_equipment": [],
+      "injuries": [],
+      "medical_conditions": [],
+      "created_at": "2025-07-13T18:45:58.044041",
+      "updated_at": "2025-07-13T18:45:58.044041"
+    }
+  },
+  "workouts": {},
+  "measurements": {}
+}

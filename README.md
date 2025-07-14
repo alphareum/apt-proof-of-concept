@@ -16,38 +16,80 @@ This proof-of-concept showcases the integration of computer vision, pose detecti
 
 ### Choose Your Installation Method:
 
-#### 🖱️ One-Click Setup (Windows)
-- **Batch File**: Double-click `setup_fitness_app.bat`
-- **PowerShell**: Right-click `setup_fitness_app.ps1` → "Run with PowerShell"
-
 #### ⚡ UV Package Manager (Recommended)
 ```bash
-# Install UV (ultra-fast Python package manager)
+# One-command setup and run
+python run.py --setup --run
+
+# Or step by step:
+python run.py --setup     # Setup environment
+python run.py --run       # Run application
+```
+
+#### 🖱️ One-Click Setup (Windows)
+- **UV Setup**: Double-click `setup-uv.bat` or run `setup-uv.ps1`
+- **Quick Run**: Double-click `run-app.bat` or run `run-app.ps1`
+
+#### 🔧 Manual UV Setup
+```bash
+# Install UV if not available
 pip install uv
 
-# Setup and run
-uv venv fitness_env
-source fitness_env/bin/activate  # Windows: fitness_env\Scripts\activate
-uv pip install -r requirements_fitness.txt
-uvx streamlit run fitness_app.py --server.port 8502
+# Create virtual environment
+uv venv .venv
+
+# Install dependencies
+uv pip install -r requirements.txt --python .venv/Scripts/python
+
+# Run application
+.venv/Scripts/activate  # Windows
+# or source .venv/bin/activate  # Unix-like
+streamlit run app.py
 ```
 
-#### 🐍 Traditional Python
+#### 🐍 Traditional Python (Fallback)
 ```bash
-python run_fitness_app.py
+python -m venv .venv
+.venv/Scripts/activate  # Windows
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-## 📋 What's Included
+## � Project Structure
+
+```
+├── app.py                      # Main Streamlit application
+├── pyproject.toml             # Modern Python project configuration
+├── requirements.txt           # Dependencies for UV/pip
+├── .venv/                     # Virtual environment (standard location)
+├── run.py                     # Cross-platform setup and runner
+├── setup-uv.ps1/.bat         # UV setup scripts for Windows
+├── run-app.ps1/.bat          # Quick run scripts for Windows
+├── models.py                  # Data models and database
+├── database.py                # Database operations
+├── recommendation_engine.py   # AI recommendation system
+├── body_composition_*.py      # Body analysis modules
+├── ui_components.py           # Streamlit UI components
+└── utils.py                   # Utility functions
+```
+
+## �📋 What's Included
 
 ### 🏋️‍♀️ Fitness Application
 - **Body Fat Analysis**: AI-powered body composition from photos
 - **Exercise Recommendations**: Personalized workout plans
 - **Form Correction**: Real-time pose analysis and feedback
 
-### 🛠️ Setup Tools
-- `setup_fitness_app.bat` - Windows batch setup
-- `setup_fitness_app.ps1` - PowerShell setup with enhanced features  
-- `run_fitness_app.py` - Cross-platform Python installer
+### 🛠️ Setup Tools (New UV-based)
+- `run.py` - Cross-platform setup and runner (Python)
+- `setup-uv.ps1/.bat` - UV-based setup scripts for Windows
+- `run-app.ps1/.bat` - Quick run scripts for Windows
+- `pyproject.toml` - Modern Python packaging configuration
+
+### 🛠️ Legacy Setup Tools
+- `setup_fitness_app.bat` - Original Windows batch setup
+- `setup_fitness_app.ps1` - Original PowerShell setup
+- `run_fitness_app.py` - Original cross-platform installer
 - `cleanup_fitness.py/.bat` - Environment cleanup utilities
 
 ### 📚 Documentation
