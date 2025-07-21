@@ -54,17 +54,160 @@ try:
     from database import get_database
     from recommendation_engine import AdvancedExerciseRecommendationEngine
     
+    # Import enhanced recommendation system
+    try:
+        from enhanced_recommendation_system import EnhancedRecommendationEngine
+        from workout_planner import AdvancedWorkoutPlanner
+        from workout_planner_ui import WorkoutPlannerUI
+        ENHANCED_PLANNER_AVAILABLE = True
+    except ImportError:
+        ENHANCED_PLANNER_AVAILABLE = False
+        st.warning("⚠️ Enhanced workout planner not available. Using basic recommendations.")
+    
     # Import body composition analysis
     try:
         from body_composition_analyzer import get_body_analyzer
         BODY_COMP_AVAILABLE = True
     except ImportError:
         BODY_COMP_AVAILABLE = False
-    
+
+    # Import enhanced UI components
+    try:
+        from enhanced_ui import EnhancedFitnessUI
+        ENHANCED_UI_AVAILABLE = True
+    except ImportError:
+        ENHANCED_UI_AVAILABLE = False
+
+    # Initialize enhanced UI if available
+    if ENHANCED_UI_AVAILABLE:
+        enhanced_ui = EnhancedFitnessUI()
+
 except ImportError as e:
-    st.error(f"❌ Import error: {e}")
-    st.error("Please ensure all required files are present and dependencies are installed.")
+    st.error(f"❌ Failed to import required modules: {e}")
     st.stop()
+
+def render_nutrition_tab(user_profile: UserProfile):
+    """Render nutrition and meal planning tab."""
+    
+    if ENHANCED_UI_AVAILABLE:
+        enhanced_ui.render_nutrition_tab(user_profile)
+    else:
+        st.error("🍎 Enhanced nutrition features not available. Please install required dependencies.")
+        st.markdown("""
+        ### 🍎 Nutrition Planning (Coming Soon)
+        
+        This comprehensive nutrition system will include:
+        
+        **🎯 Daily Nutrition:**
+        - Personalized macro targets (calories, protein, carbs, fat)
+        - Automatic meal plan generation
+        - Hydration tracking
+        - Supplement recommendations
+        
+        **📅 Meal Planning:**
+        - Weekly meal plans
+        - Recipe recommendations
+        - Dietary restriction support
+        - Shopping list generation
+        
+        **🍳 Recipe Management:**
+        - Recipe database with nutritional info
+        - Custom recipe creation
+        - Meal prep instructions
+        - Difficulty and time filters
+        
+        **📊 Nutrition Analytics:**
+        - Intake tracking over time
+        - Macro distribution analysis
+        - Goal progress monitoring
+        - Nutritional insights
+        """)
+
+def render_social_tab(user_profile: UserProfile):
+    """Render social and community features tab."""
+    
+    if ENHANCED_UI_AVAILABLE:
+        enhanced_ui.render_social_tab(user_profile)
+    else:
+        st.error("👥 Social features not available. Please install required dependencies.")
+        st.markdown("""
+        ### 👥 Community & Social Features (Coming Soon)
+        
+        Connect with the fitness community through:
+        
+        **🏆 Achievements System:**
+        - Unlock badges for milestones
+        - Track your fitness journey
+        - Celebrate accomplishments
+        - Progress recognition
+        
+        **🎯 Challenges:**
+        - Join community challenges
+        - Create personal goals
+        - Weekly fitness competitions
+        - Streak tracking
+        
+        **📈 Leaderboards:**
+        - Community rankings
+        - Workout frequency leaders
+        - Streak champions
+        - Achievement leaders
+        
+        **📱 Social Sharing:**
+        - Share workout results
+        - Community feed
+        - Motivational posts
+        - Progress celebrations
+        
+        **🌟 Motivation Hub:**
+        - Daily inspiration
+        - Personal stats
+        - Progress tracking
+        - Achievement highlights
+        """)
+
+def render_analytics_tab(user_profile: UserProfile):
+    """Render advanced analytics and progress tracking tab."""
+    
+    if ENHANCED_UI_AVAILABLE:
+        enhanced_ui.render_analytics_tab(user_profile)
+    else:
+        st.error("📊 Advanced analytics not available. Please install required dependencies.")
+        st.markdown("""
+        ### 📊 Advanced Analytics (Coming Soon)
+        
+        Comprehensive progress tracking with:
+        
+        **📈 Progress Overview:**
+        - Workout consistency analysis
+        - Performance trends
+        - Goal achievement tracking
+        - Comprehensive reports
+        
+        **📏 Body Measurements:**
+        - Detailed measurement logging
+        - Progress visualization
+        - Trend analysis
+        - Prediction models
+        
+        **💪 Performance Tracking:**
+        - Strength progression
+        - Exercise-specific metrics
+        - Volume and intensity tracking
+        - Personal records
+        
+        **📸 Progress Photos:**
+        - Visual progress tracking
+        - Before/after comparisons
+        - Timeline visualization
+        - Body composition changes
+        
+        **🔮 Predictions:**
+        - Goal timeline estimates
+        - Progress forecasting
+        - Trend analysis
+        - Smart recommendations
+        """)
 
 def initialize_session_state():
     """Initialize Streamlit session state variables."""
@@ -182,12 +325,15 @@ def render_main_application():
     # Sidebar with user info and navigation
     render_sidebar(user_profile)
     
-    # Main content area with tabs
+    # Main content area with enhanced tabs
     tabs = st.tabs([
         "📊 Body Analysis", 
         "💪 Recommendations", 
+        "📅 Workout Planner",
+        "� Nutrition & Meals",
+        "👥 Community & Social",
+        "📈 Advanced Analytics",
         "🎯 Form Correction",
-        "📈 Progress Tracking",
         "🏆 Goal Management"
     ])
     
@@ -198,12 +344,21 @@ def render_main_application():
         render_recommendations_tab(user_profile)
     
     with tabs[2]:
-        render_form_correction_tab(user_profile)
+        render_workout_planner_tab(user_profile)
     
     with tabs[3]:
-        render_progress_tracking_tab(user_profile)
+        render_nutrition_tab(user_profile)
     
     with tabs[4]:
+        render_social_tab(user_profile)
+    
+    with tabs[5]:
+        render_analytics_tab(user_profile)
+    
+    with tabs[6]:
+        render_form_correction_tab(user_profile)
+    
+    with tabs[7]:
         render_goal_management_tab(user_profile)
 
 def render_sidebar(user_profile: UserProfile):
@@ -862,6 +1017,88 @@ def render_recommendations_tab(user_profile: UserProfile):
     st.header("💪 Exercise Recommendations")
     st.info("Getting personalized exercise recommendations based on your profile...")
     
+    # Check if enhanced recommendations are available
+    if ENHANCED_PLANNER_AVAILABLE:
+        try:
+            # Use enhanced recommendation engine
+            enhanced_engine = EnhancedRecommendationEngine()
+            enhanced_recommendations = enhanced_engine.generate_adaptive_recommendations(user_profile)
+            
+            if 'error' not in enhanced_recommendations:
+                render_enhanced_recommendations(enhanced_recommendations, user_profile)
+            else:
+                st.error(f"Error generating enhanced recommendations: {enhanced_recommendations['error']}")
+                render_basic_recommendations(user_profile)
+        except Exception as e:
+            st.warning(f"Enhanced recommendations unavailable: {str(e)}")
+            render_basic_recommendations(user_profile)
+    else:
+        render_basic_recommendations(user_profile)
+
+def render_enhanced_recommendations(recommendations: Dict[str, Any], user_profile: UserProfile):
+    """Render enhanced AI-powered recommendations."""
+    
+    st.markdown("### 🤖 AI-Powered Recommendations")
+    
+    # Display adaptive recommendations
+    daily_workouts = recommendations.get('daily_workouts', {})
+    workout_varieties = recommendations.get('workout_varieties', {})
+    
+    # Create tabs for different recommendation types
+    rec_tabs = st.tabs(["🎯 Today's Focus", "🔄 Workout Varieties", "📈 Progression Plan"])
+    
+    with rec_tabs[0]:
+        st.markdown("#### Today's Recommended Workout")
+        if daily_workouts:
+            for workout_type, workout_details in daily_workouts.items():
+                with st.expander(f"{workout_type.replace('_', ' ').title()}", expanded=True):
+                    if isinstance(workout_details, dict) and 'exercises' in workout_details:
+                        for exercise in workout_details['exercises']:
+                            st.markdown(f"**{exercise.get('name', 'Exercise')}**")
+                            st.markdown(f"Sets: {exercise.get('sets', 'N/A')} | Reps: {exercise.get('reps', 'N/A')}")
+                            
+                            if exercise.get('technique_cues'):
+                                st.caption("Key cues: " + ", ".join(exercise['technique_cues'][:2]))
+    
+    with rec_tabs[1]:
+        st.markdown("#### Alternative Workout Options")
+        if workout_varieties:
+            for variety_name, variety_details in workout_varieties.items():
+                st.markdown(f"**{variety_name.replace('_', ' ').title()}**")
+                st.markdown(variety_details.get('description', 'Alternative workout option'))
+    
+    with rec_tabs[2]:
+        st.markdown("#### Your Progression Plan")
+        progression_plan = recommendations.get('progression_plan', {})
+        if progression_plan:
+            for week, plan in progression_plan.items():
+                st.markdown(f"**Week {week}:** {plan}")
+    
+    # User analysis insights
+    user_analysis = recommendations.get('user_analysis', {})
+    if user_analysis:
+        st.markdown("### 🧠 AI Analysis Insights")
+        
+        analysis_cols = st.columns(2)
+        with analysis_cols[0]:
+            fitness_assessment = user_analysis.get('fitness_assessment', {})
+            if fitness_assessment:
+                st.markdown("**Fitness Assessment:**")
+                for key, value in fitness_assessment.items():
+                    st.markdown(f"• {key.replace('_', ' ').title()}: {value}")
+        
+        with analysis_cols[1]:
+            motivation_factors = user_analysis.get('motivation_factors', [])
+            if motivation_factors:
+                st.markdown("**Motivation Factors:**")
+                for factor in motivation_factors:
+                    st.markdown(f"• {factor}")
+
+def render_basic_recommendations(user_profile: UserProfile):
+    """Render basic recommendations as fallback."""
+    
+    st.markdown("### 📋 Basic Recommendations")
+    
     # Basic recommendations display
     recommendations = generate_basic_recommendations(user_profile)
     for rec in recommendations:
@@ -870,6 +1107,35 @@ def render_recommendations_tab(user_profile: UserProfile):
         st.write(f"**Duration:** {rec['duration']}")
         st.write(f"**Description:** {rec['description']}")
         st.divider()
+
+def render_workout_planner_tab(user_profile: UserProfile):
+    """Render the enhanced workout planner tab."""
+    
+    if not ENHANCED_PLANNER_AVAILABLE:
+        st.error("❌ Enhanced workout planner is not available. Please ensure all required dependencies are installed.")
+        return
+    
+    try:
+        # Initialize the workout planner UI
+        planner_ui = WorkoutPlannerUI()
+        
+        # Render the complete workout planner interface
+        planner_ui.render_workout_planner_tab(user_profile)
+        
+    except Exception as e:
+        st.error(f"Error loading workout planner: {str(e)}")
+        st.markdown("### 📅 Basic Workout Planning")
+        st.info("The enhanced workout planner is temporarily unavailable. Here's a basic weekly schedule:")
+        
+        # Fallback basic schedule
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        
+        for day in days:
+            if day in ['Tuesday', 'Thursday', 'Sunday']:
+                st.markdown(f"**{day}:** Rest Day")
+            else:
+                workout_type = "Cardio" if day in ['Monday', 'Friday'] else "Strength"
+                st.markdown(f"**{day}:** {workout_type} Training - {user_profile.available_time} minutes")
 
 def render_form_correction_tab(user_profile: UserProfile):
     """Render form correction tab."""
