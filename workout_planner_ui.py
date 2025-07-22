@@ -430,27 +430,45 @@ class WorkoutPlannerUI:
         workout = today_plan.get('workout')
         week_info = today_plan.get('week_info', {})
         
-        # Safety check: ensure workout is a WorkoutDay object
-        if not hasattr(workout, 'workout_type'):
-            st.error(f"Error: workout object is missing expected attributes. Type: {type(workout)}")
+        # Handle None workout
+        if workout is None:
+            st.warning("⚠️ No workout data available for today.")
+            return
+        
+        # Handle different workout types (dict vs object)
+        if isinstance(workout, dict):
+            # Workout is a dictionary - extract values safely
+            workout_type = workout.get('workout_type', workout.get('name', 'Workout'))
+            total_duration = workout.get('total_duration', workout.get('duration', 45))
+            intensity_level = workout.get('intensity_level', workout.get('intensity', 'moderate'))
+            estimated_calories = workout.get('estimated_calories', workout.get('calories', 300))
+        elif hasattr(workout, 'workout_type'):
+            # Workout is a WorkoutDay object - access attributes directly
+            workout_type = workout.workout_type
+            total_duration = workout.total_duration
+            intensity_level = workout.intensity_level
+            estimated_calories = workout.estimated_calories
+        else:
+            st.error(f"Error: workout object has unexpected format. Type: {type(workout)}")
+            st.error(f"Available keys/attributes: {dir(workout) if hasattr(workout, '__dict__') else list(workout.keys()) if hasattr(workout, 'keys') else 'No keys available'}")
             return
         
         # Header
-        st.markdown(f"## 🏋️‍♀️ {workout.workout_type.replace('_', ' ').title()}")
-        st.markdown(f"**Week {week_info['week_number']} • {week_info['phase']}**")
+        st.markdown(f"## 🏋️‍♀️ {workout_type.replace('_', ' ').title()}")
+        st.markdown(f"**Week {week_info.get('week_number', 1)} • {week_info.get('phase', 'Training')}**")
         
         # Quick stats
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Duration", f"{workout.total_duration} min")
+            st.metric("Duration", f"{total_duration} min")
         with col2:
-            st.metric("Intensity", workout.intensity_level.title())
+            st.metric("Intensity", str(intensity_level).title())
         with col3:
-            st.metric("Calories", f"~{workout.estimated_calories}")
+            st.metric("Calories", f"~{estimated_calories}")
         with col4:
-            progress_pct = (week_info['week_number'] / 
-                          int(week_info['program_progress'].split('/')[1])) * 100
+            progress_pct = (week_info.get('week_number', 1) / 
+                          int(week_info.get('program_progress', '1/12').split('/')[1])) * 100
             st.metric("Progress", f"{progress_pct:.0f}%")
         
         # Workout structure
@@ -512,7 +530,20 @@ class WorkoutPlannerUI:
     def _display_main_workout(self, workout):
         """Display main workout exercises."""
         
-        for i, exercise in enumerate(workout.exercises, 1):
+        # Get exercises from workout (handle both dict and object)
+        if isinstance(workout, dict):
+            exercises = workout.get('exercises', [])
+        elif hasattr(workout, 'exercises'):
+            exercises = workout.exercises
+        else:
+            st.warning("No exercise data available for this workout.")
+            return
+        
+        if not exercises:
+            st.info("No exercises defined for this workout.")
+            return
+        
+        for i, exercise in enumerate(exercises, 1):
             # Safety check: ensure exercise is a dictionary
             if not isinstance(exercise, dict):
                 st.error(f"Error: Exercise {i} is not in expected format. Type: {type(exercise)}")
@@ -558,7 +589,15 @@ class WorkoutPlannerUI:
     def _display_warmup_routine(self, workout):
         """Display warm-up routine."""
         
-        st.markdown(f"**Duration:** {workout.warm_up_duration} minutes")
+        # Get warm_up_duration from workout (handle both dict and object)
+        if isinstance(workout, dict):
+            warm_up_duration = workout.get('warm_up_duration', 5)
+        elif hasattr(workout, 'warm_up_duration'):
+            warm_up_duration = workout.warm_up_duration
+        else:
+            warm_up_duration = 5
+        
+        st.markdown(f"**Duration:** {warm_up_duration} minutes")
         
         warmup_exercises = [
             "5 minutes light cardio (marching, easy movement)",
@@ -573,7 +612,15 @@ class WorkoutPlannerUI:
     def _display_cooldown_routine(self, workout):
         """Display cool-down routine."""
         
-        st.markdown(f"**Duration:** {workout.cool_down_duration} minutes")
+        # Get cool_down_duration from workout (handle both dict and object)
+        if isinstance(workout, dict):
+            cool_down_duration = workout.get('cool_down_duration', 5)
+        elif hasattr(workout, 'cool_down_duration'):
+            cool_down_duration = workout.cool_down_duration
+        else:
+            cool_down_duration = 5
+        
+        st.markdown(f"**Duration:** {cool_down_duration} minutes")
         
         cooldown_exercises = [
             "Gradual heart rate reduction (2-3 min easy movement)",

@@ -227,6 +227,156 @@ class EnhancedFitnessUI:
                 self._display_weekly_meal_plan(weekly_plan)
     
     def _render_recipe_browser(self, user_profile: UserProfile):
+        """Render recipe browser with database integration."""
+        
+        st.markdown("### 🍳 Recipe Database")
+        
+        if not ENHANCED_FEATURES_AVAILABLE:
+            st.warning("Recipe database features require additional dependencies")
+            return
+        
+        # Import recipe database
+        try:
+            from recipe_database import ComprehensiveRecipeDatabase
+            recipe_db = ComprehensiveRecipeDatabase()
+            
+            # Recipe filters
+            filter_col1, filter_col2, filter_col3 = st.columns(3)
+            
+            with filter_col1:
+                category_filter = st.selectbox(
+                    "Category",
+                    ["all", "high_protein", "low_carb", "balanced", "breakfast"],
+                    help="Filter recipes by category"
+                )
+            
+            with filter_col2:
+                cuisine_filter = st.selectbox(
+                    "Cuisine",
+                    ["all", "mediterranean", "asian", "american", "italian", "mexican"],
+                    help="Filter by cuisine type"
+                )
+            
+            with filter_col3:
+                max_prep_time = st.slider(
+                    "Max Prep Time (min)",
+                    5, 60, 30,
+                    help="Maximum preparation time"
+                )
+            
+            # Advanced filters
+            with st.expander("🔍 Advanced Filters"):
+                adv_col1, adv_col2 = st.columns(2)
+                
+                with adv_col1:
+                    max_calories = st.number_input("Max Calories/Serving", 100, 1000, 600)
+                    min_protein = st.number_input("Min Protein (g)", 0, 50, 15)
+                
+                with adv_col2:
+                    dietary_tags = st.multiselect(
+                        "Dietary Requirements",
+                        ["vegetarian", "vegan", "gluten_free", "dairy_free", "keto", "low_carb"]
+                    )
+            
+            # Search recipes
+            search_filters = {}
+            if category_filter != "all":
+                search_filters['category'] = category_filter
+            if cuisine_filter != "all":
+                search_filters['cuisine_type'] = cuisine_filter
+            if max_prep_time < 60:
+                search_filters['max_prep_time'] = max_prep_time
+            if max_calories < 1000:
+                search_filters['max_calories'] = max_calories
+            if min_protein > 0:
+                search_filters['min_protein'] = min_protein
+            if dietary_tags:
+                search_filters['tags'] = dietary_tags
+            
+            # Get filtered recipes
+            if search_filters:
+                filtered_recipes = recipe_db.search_recipes(**search_filters)
+            else:
+                # Get recommendations based on user profile
+                filtered_recipes = recipe_db.get_recipe_recommendations(user_profile, "dinner", 12)
+            
+            st.markdown(f"#### 📖 Found {len(filtered_recipes)} Recipes")
+            
+            # Display recipes in grid
+            if filtered_recipes:
+                # Show recipes in columns
+                recipe_cols = st.columns(2)
+                
+                for i, recipe in enumerate(filtered_recipes):
+                    col = recipe_cols[i % 2]
+                    
+                    with col:
+                        with st.expander(f"🍽️ {recipe.name}", expanded=False):
+                            # Recipe overview
+                            overview_col1, overview_col2 = st.columns(2)
+                            
+                            with overview_col1:
+                                st.write(f"**Prep Time:** {recipe.prep_time_minutes} min")
+                                st.write(f"**Cook Time:** {recipe.cook_time_minutes} min")
+                                st.write(f"**Servings:** {recipe.servings}")
+                                st.write(f"**Difficulty:** {recipe.difficulty.title()}")
+                            
+                            with overview_col2:
+                                # Nutrition info
+                                st.markdown("**Nutrition per serving:**")
+                                st.write(f"Calories: {recipe.nutrition.calories_per_serving}")
+                                st.write(f"Protein: {recipe.nutrition.protein_g}g")
+                                st.write(f"Carbs: {recipe.nutrition.carbs_g}g")
+                                st.write(f"Fat: {recipe.nutrition.fat_g}g")
+                            
+                            # Description
+                            st.write(f"**Description:** {recipe.description}")
+                            
+                            # Tags
+                            if recipe.tags:
+                                tag_text = " ".join([f"`{tag}`" for tag in recipe.tags[:5]])
+                                st.markdown(f"**Tags:** {tag_text}")
+                            
+                            # Ingredients (collapsible)
+                            if st.checkbox(f"Show Ingredients", key=f"ingredients_{recipe.id}"):
+                                st.markdown("**Ingredients:**")
+                                for ingredient in recipe.ingredients:
+                                    st.write(f"• {ingredient['amount']} {ingredient['name']}")
+                            
+                            # Instructions (collapsible)
+                            if st.checkbox(f"Show Instructions", key=f"instructions_{recipe.id}"):
+                                st.markdown("**Instructions:**")
+                                for i, instruction in enumerate(recipe.instructions, 1):
+                                    st.write(f"{i}. {instruction}")
+                            
+                            # Action buttons
+                            button_col1, button_col2 = st.columns(2)
+                            
+                            with button_col1:
+                                if st.button(f"❤️ Favorite", key=f"fav_{recipe.id}"):
+                                    if 'favorite_recipes' not in st.session_state:
+                                        st.session_state.favorite_recipes = []
+                                    st.session_state.favorite_recipes.append(recipe)
+                                    st.success("Added to favorites!")
+                            
+                            with button_col2:
+                                if st.button(f"📋 Add to Meal Plan", key=f"plan_{recipe.id}"):
+                                    if 'meal_plan_recipes' not in st.session_state:
+                                        st.session_state.meal_plan_recipes = []
+                                    st.session_state.meal_plan_recipes.append(recipe)
+                                    st.success("Added to meal plan!")
+            else:
+                st.info("No recipes found matching your criteria. Try adjusting the filters.")
+                
+                # Show some popular recipes as fallback
+                st.markdown("#### 🌟 Popular Recipes")
+                popular_recipes = recipe_db.get_recipe_recommendations(user_profile, "dinner", 3)
+                
+                for recipe in popular_recipes:
+                    st.markdown(f"**{recipe.name}** - {recipe.description}")
+                    
+        except ImportError:
+            st.error("Recipe database not available. Please check dependencies.")
         """Render recipe browsing and search interface."""
         
         st.markdown("### 🍳 Recipe Browser")
@@ -316,6 +466,560 @@ class EnhancedFitnessUI:
             st.info("No recipes found with current filters. Try adjusting your search criteria.")
     
     def _render_meal_prep_planner(self, user_profile: UserProfile):
+        """Render meal prep planning with optional scheduling."""
+        
+        st.markdown("### 🛒 Meal Prep Planner")
+        
+        # Make scheduling optional based on user preference
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("**Meal Prep Options:**")
+        
+        with col2:
+            include_scheduling = st.checkbox("📅 Include meal scheduling", 
+                                           value=False,
+                                           help="Enable this for detailed meal timing and prep schedules")
+        
+        # Recipe selection for meal prep
+        if ENHANCED_FEATURES_AVAILABLE:
+            from recipe_database import ComprehensiveRecipeDatabase
+            recipe_db = ComprehensiveRecipeDatabase()
+            
+            # Get recipes suitable for meal prep
+            prep_recipes = recipe_db.search_recipes(
+                tags=['meal_prep_friendly', 'batch_cooking', 'freezer_friendly']
+            )
+            
+            if prep_recipes:
+                st.markdown("#### 🍽️ Meal Prep Recipe Suggestions")
+                
+                recipe_cols = st.columns(2)
+                for i, recipe in enumerate(prep_recipes[:6]):  # Show top 6
+                    col = recipe_cols[i % 2]
+                    
+                    with col:
+                        with st.expander(f"🍳 {recipe.name}", expanded=False):
+                            st.write(f"**Prep Time:** {recipe.prep_time_minutes} min")
+                            st.write(f"**Servings:** {recipe.servings}")
+                            st.write(f"**Storage:** {recipe.storage_instructions}")
+                            
+                            # Nutrition info
+                            st.markdown("**Nutrition per serving:**")
+                            nutr_col1, nutr_col2 = st.columns(2)
+                            with nutr_col1:
+                                st.write(f"Calories: {recipe.nutrition.calories_per_serving}")
+                                st.write(f"Protein: {recipe.nutrition.protein_g}g")
+                            with nutr_col2:
+                                st.write(f"Carbs: {recipe.nutrition.carbs_g}g")
+                                st.write(f"Fat: {recipe.nutrition.fat_g}g")
+                            
+                            if st.button(f"Add to Prep List", key=f"add_prep_{recipe.id}"):
+                                if 'meal_prep_list' not in st.session_state:
+                                    st.session_state.meal_prep_list = []
+                                st.session_state.meal_prep_list.append(recipe)
+                                st.success(f"Added {recipe.name} to prep list!")
+        
+        # Optional scheduling section
+        if include_scheduling:
+            st.markdown("#### 📅 Meal Prep Schedule")
+            
+            schedule_tab1, schedule_tab2 = st.tabs(["📋 Prep Plan", "🛒 Shopping List"])
+            
+            with schedule_tab1:
+                # Weekly prep schedule
+                prep_days = st.multiselect(
+                    "Select meal prep days:",
+                    ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+                    default=["Sunday"]
+                )
+                
+                if prep_days:
+                    for day in prep_days:
+                        st.markdown(f"**{day} Prep Schedule:**")
+                        
+                        # Time slots for prep
+                        time_slot = st.selectbox(
+                            f"Prep time for {day}:",
+                            ["Morning (8-11 AM)", "Afternoon (12-3 PM)", "Evening (5-8 PM)"],
+                            key=f"time_{day}"
+                        )
+                        
+                        # Estimated prep time
+                        if 'meal_prep_list' in st.session_state and st.session_state.meal_prep_list:
+                            total_prep_time = sum(recipe.prep_time_minutes + recipe.cook_time_minutes 
+                                                for recipe in st.session_state.meal_prep_list)
+                            st.info(f"Estimated total prep time: {total_prep_time} minutes")
+            
+            with schedule_tab2:
+                # Shopping list generation
+                if 'meal_prep_list' in st.session_state and st.session_state.meal_prep_list:
+                    shopping_list = self._generate_shopping_list(st.session_state.meal_prep_list)
+                    
+                    st.markdown("**🛒 Generated Shopping List:**")
+                    
+                    # Group by categories
+                    categories = {}
+                    for item in shopping_list:
+                        category = item.get('category', 'Other')
+                        if category not in categories:
+                            categories[category] = []
+                        categories[category].append(item)
+                    
+                    for category, items in categories.items():
+                        st.markdown(f"**{category}:**")
+                        for item in items:
+                            st.write(f"- {item['name']}: {item['total_amount']}")
+                else:
+                    st.info("Add recipes to prep list to generate shopping list")
+        else:
+            # Simplified meal prep without scheduling
+            st.markdown("#### 🥘 Simple Meal Prep Guide")
+            
+            simple_tips = [
+                "**Batch cook proteins:** Grill chicken, bake fish, or cook beans in bulk",
+                "**Prep vegetables:** Wash, chop, and store vegetables for easy access",
+                "**Cook grains:** Prepare rice, quinoa, or oats for the week",
+                "**Portion snacks:** Pre-portion nuts, fruits, and healthy snacks",
+                "**Prepare sauces:** Make dressings and sauces to add flavor"
+            ]
+            
+            for tip in simple_tips:
+                st.markdown(f"• {tip}")
+    
+    def _render_nutrition_analytics(self, user_profile: UserProfile):
+        """Render comprehensive nutrition analytics."""
+        
+        st.markdown("### 📊 Comprehensive Nutrition Analytics")
+        
+        if not ENHANCED_FEATURES_AVAILABLE:
+            st.warning("Enhanced analytics require additional dependencies")
+            return
+        
+        # Create sample nutrition data for demonstration
+        sample_data = self._generate_sample_nutrition_data(user_profile)
+        
+        # Analytics tabs
+        analytics_tabs = st.tabs([
+            "📈 Intake Trends", 
+            "🎯 Goal Progress", 
+            "💫 Macro Balance",
+            "📅 Weekly Analysis",
+            "🔍 Detailed Insights"
+        ])
+        
+        with analytics_tabs[0]:
+            self._render_intake_trends(sample_data, user_profile)
+        
+        with analytics_tabs[1]:
+            self._render_goal_progress_analytics(sample_data, user_profile)
+        
+        with analytics_tabs[2]:
+            self._render_macro_balance_analytics(sample_data, user_profile)
+        
+        with analytics_tabs[3]:
+            self._render_weekly_nutrition_analysis(sample_data, user_profile)
+        
+        with analytics_tabs[4]:
+            self._render_detailed_nutrition_insights(sample_data, user_profile)
+    
+    def _render_intake_trends(self, data: Dict, user_profile: UserProfile):
+        """Render intake trend analytics."""
+        
+        st.markdown("#### 📈 Daily Intake Trends (Last 30 Days)")
+        
+        # Create sample trend data
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+        
+        # Multi-metric trend chart
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Calories', 'Protein (g)', 'Carbs (g)', 'Fat (g)'),
+            vertical_spacing=0.12
+        )
+        
+        days = list(range(1, 31))
+        
+        # Calories trend
+        calories = [1800 + i*5 + (i%7)*50 for i in days]
+        fig.add_trace(go.Scatter(x=days, y=calories, name="Calories", line=dict(color='#FF6B6B')), row=1, col=1)
+        fig.add_hline(y=2000, line_dash="dash", line_color="red", row=1, col=1)
+        
+        # Protein trend  
+        protein = [120 + i*2 + (i%5)*10 for i in days]
+        fig.add_trace(go.Scatter(x=days, y=protein, name="Protein", line=dict(color='#4ECDC4')), row=1, col=2)
+        fig.add_hline(y=150, line_dash="dash", line_color="green", row=1, col=2)
+        
+        # Carbs trend
+        carbs = [200 + i*3 + (i%6)*15 for i in days] 
+        fig.add_trace(go.Scatter(x=days, y=carbs, name="Carbs", line=dict(color='#45B7D1')), row=2, col=1)
+        fig.add_hline(y=250, line_dash="dash", line_color="blue", row=2, col=1)
+        
+        # Fat trend
+        fat = [60 + i*1 + (i%4)*8 for i in days]
+        fig.add_trace(go.Scatter(x=days, y=fat, name="Fat", line=dict(color='#96CEB4')), row=2, col=2)
+        fig.add_hline(y=80, line_dash="dash", line_color="orange", row=2, col=2)
+        
+        fig.update_layout(height=500, showlegend=False, title_text="Nutrition Intake Trends")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Trend insights
+        st.markdown("**📊 Trend Analysis:**")
+        insights_cols = st.columns(3)
+        
+        with insights_cols[0]:
+            st.metric("Avg Daily Calories", "1,935", "+85 from goal")
+            st.metric("Consistency Score", "87%", "+5%")
+        
+        with insights_cols[1]:
+            st.metric("Protein Target Hit", "23/30 days", "77%")
+            st.metric("Best Streak", "7 days", "Last week")
+        
+        with insights_cols[2]:
+            st.metric("Macro Balance", "Good", "85/100")
+            st.metric("Hydration", "2.1L avg", "+0.3L")
+    
+    def _render_goal_progress_analytics(self, data: Dict, user_profile: UserProfile):
+        """Render goal progress analytics."""
+        
+        st.markdown("#### 🎯 Goal Achievement Analytics")
+        
+        # Goal progress visualization
+        goal_data = {
+            'Daily Calorie Target': {'achieved': 23, 'total': 30, 'target': 2000, 'avg': 1935},
+            'Protein Goal (150g)': {'achieved': 25, 'total': 30, 'target': 150, 'avg': 142},
+            'Hydration (2L)': {'achieved': 27, 'total': 30, 'target': 2.0, 'avg': 2.1},
+            'Meal Timing': {'achieved': 20, 'total': 30, 'target': 5, 'avg': 4.2}
+        }
+        
+        # Create progress bars
+        for goal_name, stats in goal_data.items():
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                progress = stats['achieved'] / stats['total']
+                st.metric(goal_name, f"{stats['achieved']}/{stats['total']} days", 
+                         f"{progress:.0%} success rate")
+                st.progress(progress)
+            
+            with col2:
+                if 'target' in stats:
+                    difference = stats['avg'] - stats['target']
+                    delta_text = f"{difference:+.1f}" if abs(difference) >= 0.1 else "On target"
+                    st.metric("Average", f"{stats['avg']:.1f}", delta_text)
+            
+            with col3:
+                # Color-coded status
+                if progress >= 0.8:
+                    st.success("Excellent")
+                elif progress >= 0.6:
+                    st.warning("Good")
+                else:
+                    st.error("Needs Focus")
+        
+        # Weekly goal comparison
+        st.markdown("#### 📅 Weekly Goal Comparison")
+        
+        weekly_fig = go.Figure()
+        weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4']
+        calorie_achievement = [85, 78, 82, 90]
+        protein_achievement = [92, 88, 85, 95]
+        
+        weekly_fig.add_trace(go.Bar(name='Calorie Goals', x=weeks, y=calorie_achievement,
+                                   marker_color='#FF6B6B'))
+        weekly_fig.add_trace(go.Bar(name='Protein Goals', x=weeks, y=protein_achievement,
+                                   marker_color='#4ECDC4'))
+        
+        weekly_fig.update_layout(
+            title="Weekly Goal Achievement (%)",
+            yaxis_title="Achievement Percentage",
+            barmode='group',
+            height=400
+        )
+        
+        st.plotly_chart(weekly_fig, use_container_width=True)
+    
+    def _render_macro_balance_analytics(self, data: Dict, user_profile: UserProfile):
+        """Render macro balance analytics."""
+        
+        st.markdown("#### 💫 Macronutrient Balance Analysis")
+        
+        # Current vs recommended macros
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Current Average Macros:**")
+            current_macros = {'Protein': 25, 'Carbs': 45, 'Fat': 30}
+            
+            current_fig = go.Figure(data=[go.Pie(
+                labels=list(current_macros.keys()),
+                values=list(current_macros.values()),
+                hole=.3,
+                marker_colors=['#4ECDC4', '#45B7D1', '#96CEB4']
+            )])
+            current_fig.update_layout(title="Current Distribution (%)", height=300)
+            st.plotly_chart(current_fig, use_container_width=True)
+        
+        with col2:
+            st.markdown("**Recommended for Your Goal:**")
+            
+            # Get goal-specific recommendations
+            goal = getattr(user_profile, 'primary_goal', None)
+            if goal and hasattr(goal, 'value'):
+                goal_value = goal.value
+            else:
+                goal_value = 'general_fitness'
+            
+            recommended_macros = self._get_recommended_macros(goal_value)
+            
+            rec_fig = go.Figure(data=[go.Pie(
+                labels=list(recommended_macros.keys()),
+                values=list(recommended_macros.values()),
+                hole=.3,
+                marker_colors=['#FF6B6B', '#FFA07A', '#98FB98']
+            )])
+            rec_fig.update_layout(title="Recommended Distribution (%)", height=300)
+            st.plotly_chart(rec_fig, use_container_width=True)
+        
+        # Macro timing analysis
+        st.markdown("#### ⏰ Macro Timing Analysis")
+        
+        timing_data = {
+            'Breakfast': {'protein': 20, 'carbs': 35, 'fat': 25},
+            'Lunch': {'protein': 30, 'carbs': 40, 'fat': 30},
+            'Dinner': {'protein': 35, 'carbs': 30, 'fat': 35},
+            'Snacks': {'protein': 15, 'carbs': 25, 'fat': 10}
+        }
+        
+        timing_fig = go.Figure()
+        meals = list(timing_data.keys())
+        
+        timing_fig.add_trace(go.Bar(name='Protein', x=meals, 
+                                   y=[timing_data[meal]['protein'] for meal in meals],
+                                   marker_color='#4ECDC4'))
+        timing_fig.add_trace(go.Bar(name='Carbs', x=meals,
+                                   y=[timing_data[meal]['carbs'] for meal in meals], 
+                                   marker_color='#45B7D1'))
+        timing_fig.add_trace(go.Bar(name='Fat', x=meals,
+                                   y=[timing_data[meal]['fat'] for meal in meals],
+                                   marker_color='#96CEB4'))
+        
+        timing_fig.update_layout(
+            title="Macro Distribution by Meal (grams)",
+            yaxis_title="Grams",
+            barmode='group',
+            height=400
+        )
+        
+        st.plotly_chart(timing_fig, use_container_width=True)
+    
+    def _get_recommended_macros(self, goal: str) -> Dict[str, int]:
+        """Get recommended macro distribution based on goal."""
+        
+        recommendations = {
+            'weight_loss': {'Protein': 35, 'Carbs': 35, 'Fat': 30},
+            'muscle_gain': {'Protein': 30, 'Carbs': 40, 'Fat': 30},
+            'strength': {'Protein': 25, 'Carbs': 45, 'Fat': 30},
+            'endurance': {'Protein': 20, 'Carbs': 55, 'Fat': 25},
+            'general_fitness': {'Protein': 25, 'Carbs': 45, 'Fat': 30}
+        }
+        
+        return recommendations.get(goal, recommendations['general_fitness'])
+    
+    def _generate_sample_nutrition_data(self, user_profile: UserProfile) -> Dict[str, Any]:
+        """Generate sample nutrition data for demonstration."""
+        
+        import numpy as np
+        
+        # Generate 30 days of sample data
+        days = 30
+        base_calories = 2000
+        base_protein = 120
+        base_carbs = 200
+        base_fat = 70
+        
+        return {
+            'daily_calories': [base_calories + np.random.randint(-200, 200) for _ in range(days)],
+            'daily_protein': [base_protein + np.random.randint(-20, 30) for _ in range(days)],
+            'daily_carbs': [base_carbs + np.random.randint(-50, 50) for _ in range(days)],
+            'daily_fat': [base_fat + np.random.randint(-15, 20) for _ in range(days)],
+            'dates': [f"2024-01-{i+1:02d}" for i in range(days)]
+        }
+    
+    def _render_weekly_nutrition_analysis(self, data: Dict, user_profile: UserProfile):
+        """Render weekly nutrition analysis."""
+        
+        st.markdown("#### 📅 Weekly Nutrition Breakdown")
+        
+        # Weekly averages
+        weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4']
+        weekly_calories = [1950, 2020, 1980, 2100]
+        weekly_protein = [135, 142, 138, 148]
+        
+        # Weekly comparison chart
+        weekly_fig = go.Figure()
+        
+        weekly_fig.add_trace(go.Bar(
+            name='Calories (÷10)',
+            x=weeks,
+            y=[c/10 for c in weekly_calories],
+            marker_color='#FF6B6B'
+        ))
+        
+        weekly_fig.add_trace(go.Bar(
+            name='Protein (g)',
+            x=weeks,
+            y=weekly_protein,
+            marker_color='#4ECDC4'
+        ))
+        
+        weekly_fig.update_layout(
+            title='Weekly Nutrition Averages',
+            yaxis_title='Amount',
+            barmode='group',
+            height=400
+        )
+        
+        st.plotly_chart(weekly_fig, use_container_width=True)
+        
+        # Weekly insights
+        st.markdown("**📊 Weekly Insights:**")
+        insights = [
+            "Week 4 showed the highest protein intake - great for recovery!",
+            "Calorie consistency improved over the month",
+            "Weekend patterns show slightly higher intake - normal variation",
+            "Hydration tracking suggests need for improvement on weekdays"
+        ]
+        
+        for insight in insights:
+            st.write(f"• {insight}")
+    
+    def _render_detailed_nutrition_insights(self, data: Dict, user_profile: UserProfile):
+        """Render detailed nutrition insights and recommendations."""
+        
+        st.markdown("#### 🔍 Detailed Nutrition Insights")
+        
+        # Personalized insights based on user profile
+        goal = getattr(user_profile, 'primary_goal', None)
+        goal_value = goal.value if goal and hasattr(goal, 'value') else 'general_fitness'
+        
+        insights_col1, insights_col2 = st.columns(2)
+        
+        with insights_col1:
+            st.markdown("**🎯 Goal-Specific Analysis:**")
+            
+            goal_insights = {
+                'weight_loss': [
+                    "Calorie deficit averaging 300-400 calories/day",
+                    "Protein intake excellent for preserving muscle",
+                    "Consider timing carbs around workouts",
+                    "Increase vegetable intake for satiety"
+                ],
+                'muscle_gain': [
+                    "Protein intake well above minimum requirements",
+                    "Calorie surplus appropriate for lean gains", 
+                    "Post-workout nutrition timing optimal",
+                    "Consider creatine supplementation"
+                ],
+                'strength': [
+                    "Carb intake supports high-intensity training",
+                    "Protein distribution throughout day is good",
+                    "Consider increasing overall calories on training days",
+                    "Hydration critical for performance"
+                ]
+            }
+            
+            insights = goal_insights.get(goal_value, goal_insights['weight_loss'])
+            for insight in insights:
+                st.success(f"✅ {insight}")
+        
+        with insights_col2:
+            st.markdown("**⚠️ Areas for Improvement:**")
+            
+            improvements = [
+                "Increase fiber intake through more vegetables",
+                "More consistent meal timing on weekends", 
+                "Add healthy fats like avocado and nuts",
+                "Consider meal prep for better consistency"
+            ]
+            
+            for improvement in improvements:
+                st.warning(f"🔄 {improvement}")
+        
+        # Micronutrient analysis
+        st.markdown("#### 🥗 Micronutrient Spotlight")
+        
+        micro_cols = st.columns(4)
+        micronutrients = [
+            {"name": "Vitamin D", "status": "Low", "recommendation": "Consider supplement"},
+            {"name": "Iron", "status": "Good", "recommendation": "Maintain current intake"},
+            {"name": "Calcium", "status": "Adequate", "recommendation": "Include dairy/alternatives"},
+            {"name": "B12", "status": "Excellent", "recommendation": "Great job!"}
+        ]
+        
+        for i, micro in enumerate(micronutrients):
+            with micro_cols[i]:
+                status_color = {"Low": "🔴", "Good": "🟢", "Adequate": "🟡", "Excellent": "💚"}
+                icon = status_color.get(micro["status"], "🔵")
+                
+                st.metric(micro["name"], micro["status"])
+                st.caption(f"{icon} {micro['recommendation']}")
+        
+        # Advanced recommendations
+        st.markdown("#### 🎯 Advanced Recommendations")
+        
+        advanced_recs = [
+            "**Nutrient Timing**: Consume 20-30g protein within 2 hours post-workout",
+            "**Hydration**: Aim for 35ml per kg body weight daily",
+            "**Meal Frequency**: 3-4 balanced meals work well for your schedule",
+            "**Supplements**: Consider vitamin D and omega-3 based on analysis"
+        ]
+        
+        for rec in advanced_recs:
+            st.info(rec)
+    
+    def _generate_shopping_list(self, recipes: List) -> List[Dict[str, Any]]:
+        """Generate consolidated shopping list from recipes."""
+        
+        shopping_items = {}
+        
+        for recipe in recipes:
+            for ingredient in recipe.ingredients:
+                name = ingredient['name'].lower()
+                amount = ingredient['amount']
+                
+                # Simple category assignment
+                category = self._categorize_ingredient(name)
+                
+                if name in shopping_items:
+                    # Combine amounts (simplified)
+                    shopping_items[name]['total_amount'] += f", {amount}"
+                else:
+                    shopping_items[name] = {
+                        'name': ingredient['name'],
+                        'total_amount': amount,
+                        'category': category
+                    }
+        
+        return list(shopping_items.values())
+    
+    def _categorize_ingredient(self, ingredient_name: str) -> str:
+        """Categorize ingredient for shopping list organization."""
+        
+        categories = {
+            'produce': ['tomato', 'onion', 'garlic', 'lettuce', 'cucumber', 'bell pepper', 'broccoli', 'spinach'],
+            'protein': ['chicken', 'beef', 'fish', 'salmon', 'turkey', 'tofu', 'eggs'],
+            'dairy': ['milk', 'cheese', 'yogurt', 'butter'],
+            'grains': ['rice', 'quinoa', 'oats', 'bread', 'pasta'],
+            'pantry': ['oil', 'vinegar', 'salt', 'pepper', 'spices']
+        }
+        
+        for category, items in categories.items():
+            if any(item in ingredient_name for item in items):
+                return category.title()
+        
+        return 'Other'
         """Render meal prep planning interface."""
         
         st.markdown("### 🛒 Meal Prep Planner")

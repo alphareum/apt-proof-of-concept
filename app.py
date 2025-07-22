@@ -167,47 +167,306 @@ def render_social_tab(user_profile: UserProfile):
         """)
 
 def render_analytics_tab(user_profile: UserProfile):
-    """Render advanced analytics and progress tracking tab."""
+    """Render advanced analytics and progress tracking tab with enhanced features."""
     
     if ENHANCED_UI_AVAILABLE:
         enhanced_ui.render_analytics_tab(user_profile)
     else:
-        st.error("📊 Advanced analytics not available. Please install required dependencies.")
-        st.markdown("""
-        ### 📊 Advanced Analytics (Coming Soon)
+        st.markdown("### 📊 Advanced Analytics & Progress Tracking")
         
-        Comprehensive progress tracking with:
+        # Import enhanced progress tracking
+        try:
+            from enhanced_progress_tracking import (
+                render_enhanced_progress_photos_tab,
+                render_video_form_analysis_tab, 
+                render_enhanced_measurements_tab
+            )
+            
+            # Enhanced analytics tabs
+            analytics_tabs = st.tabs([
+                "📈 Progress Overview",
+                "📸 Progress Photos + AI",
+                "🎥 Video Form Analysis", 
+                "📏 Enhanced Measurements",
+                "💪 Performance Tracking",
+                "📊 Comprehensive Reports"
+            ])
+            
+            with analytics_tabs[0]:
+                render_progress_overview(user_profile)
+            
+            with analytics_tabs[1]:
+                render_enhanced_progress_photos_tab(user_profile)
+            
+            with analytics_tabs[2]:
+                render_video_form_analysis_tab(user_profile)
+            
+            with analytics_tabs[3]:
+                render_enhanced_measurements_tab(user_profile)
+            
+            with analytics_tabs[4]:
+                render_performance_tracking_tab(user_profile)
+            
+            with analytics_tabs[5]:
+                render_comprehensive_reports_tab(user_profile)
+                
+        except ImportError:
+            st.error("📊 Enhanced analytics features not available. Please install required dependencies.")
+            render_basic_analytics_tab(user_profile)
+
+def render_progress_overview(user_profile: UserProfile):
+    """Render progress overview with key metrics."""
+    
+    st.markdown("#### 📈 Progress Overview Dashboard")
+    
+    # Key metrics in columns
+    metric_cols = st.columns(4)
+    
+    with metric_cols[0]:
+        # Simulated workout consistency
+        workout_consistency = 85  # Would come from database
+        st.metric("Workout Consistency", f"{workout_consistency}%", "+5%")
+    
+    with metric_cols[1]:
+        # Progress photos taken
+        photo_count = len(st.session_state.get('progress_photos_with_analysis', []))
+        st.metric("Progress Photos", photo_count, "+1 this week")
+    
+    with metric_cols[2]:
+        # Form analysis sessions
+        video_count = len(st.session_state.get('video_form_analysis', []))
+        st.metric("Form Analysis", video_count, "Recent session")
+    
+    with metric_cols[3]:
+        # Goals achieved
+        goals_achieved = 7  # Would come from database
+        st.metric("Goals Achieved", goals_achieved, "+2 this month")
+    
+    # Progress trends chart
+    st.markdown("#### 📊 Progress Trends (Last 12 Weeks)")
+    
+    # Create sample trend data
+    import plotly.graph_objects as go
+    weeks = list(range(1, 13))
+    weight_trend = [80 - i*0.3 + (i%3)*0.5 for i in weeks]
+    strength_trend = [100 + i*2.5 + (i%4)*1.2 for i in weeks]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=weeks, y=weight_trend, name="Weight (kg)", line=dict(color='#FF6B6B')))
+    fig.add_trace(go.Scatter(x=weeks, y=strength_trend, name="Strength Index", line=dict(color='#4ECDC4'), yaxis="y2"))
+    
+    fig.update_layout(
+        title="Weight and Strength Progress",
+        xaxis_title="Week",
+        yaxis=dict(title="Weight (kg)", side="left"),
+        yaxis2=dict(title="Strength Index", side="right", overlaying="y"),
+        height=400
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Recent activities
+    st.markdown("#### 🔄 Recent Activities")
+    
+    activities = [
+        {"date": "2024-01-22", "activity": "Progress photo analyzed", "type": "photo", "details": "AI noted improved posture"},
+        {"date": "2024-01-21", "activity": "Squat form analyzed", "type": "video", "details": "Form score: 87/100"},
+        {"date": "2024-01-20", "activity": "Body measurements recorded", "type": "measurement", "details": "Waist: -1.2cm from last month"},
+        {"date": "2024-01-19", "activity": "Workout completed", "type": "workout", "details": "Upper body strength session"}
+    ]
+    
+    for activity in activities:
+        activity_type_icons = {
+            "photo": "📸",
+            "video": "🎥", 
+            "measurement": "📏",
+            "workout": "💪"
+        }
         
-        **📈 Progress Overview:**
-        - Workout consistency analysis
-        - Performance trends
-        - Goal achievement tracking
-        - Comprehensive reports
+        icon = activity_type_icons.get(activity["type"], "📝")
+        st.write(f"{icon} **{activity['date']}** - {activity['activity']}")
+        st.caption(activity["details"])
+
+def render_performance_tracking_tab(user_profile: UserProfile):
+    """Render performance tracking with video analysis integration."""
+    
+    st.markdown("#### 💪 Performance Tracking Dashboard")
+    
+    # Performance metrics
+    st.markdown("##### 🎯 Key Performance Indicators")
+    
+    perf_cols = st.columns(3)
+    
+    with perf_cols[0]:
+        st.metric("Average Form Score", "84.2", "+2.3 pts")
+        st.metric("Video Sessions", "12", "+3 this month")
+    
+    with perf_cols[1]:
+        st.metric("Technique Improvements", "8", "+2 exercises")
+        st.metric("Best Streak", "14 days", "Current")
+    
+    with perf_cols[2]:
+        st.metric("Personal Records", "5", "+1 this week")
+        st.metric("Injury Prevention", "98%", "Excellent")
+    
+    # Exercise-specific tracking
+    st.markdown("##### 🏋️ Exercise-Specific Performance")
+    
+    exercise_data = {
+        "Squat": {"form_score": 87, "last_analysis": "2024-01-21", "improvements": "Depth improved, knee tracking better"},
+        "Deadlift": {"form_score": 82, "last_analysis": "2024-01-19", "improvements": "Bar path more consistent"},
+        "Push-up": {"form_score": 91, "last_analysis": "2024-01-18", "improvements": "Excellent alignment maintained"}
+    }
+    
+    for exercise, data in exercise_data.items():
+        with st.expander(f"🎯 {exercise} Performance", expanded=False):
+            ex_col1, ex_col2 = st.columns(2)
+            
+            with ex_col1:
+                st.metric("Current Form Score", f"{data['form_score']}/100")
+                st.write(f"**Last Analysis:** {data['last_analysis']}")
+            
+            with ex_col2:
+                st.markdown("**Recent Improvements:**")
+                st.write(data['improvements'])
+                
+                if st.button(f"📹 New Analysis", key=f"analysis_{exercise}"):
+                    st.info(f"Upload a new {exercise} video in the Video Analysis tab")
+    
+    # Form improvement suggestions
+    st.markdown("##### 📋 Personalized Improvement Plan")
+    
+    improvements = [
+        {"exercise": "Squat", "focus": "Ankle mobility", "priority": "High", "timeline": "2 weeks"},
+        {"exercise": "Deadlift", "focus": "Hip hinge pattern", "priority": "Medium", "timeline": "3 weeks"},
+        {"exercise": "General", "focus": "Core stability", "priority": "Medium", "timeline": "Ongoing"}
+    ]
+    
+    for improvement in improvements:
+        priority_color = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}
+        icon = priority_color.get(improvement["priority"], "🔵")
         
-        **📏 Body Measurements:**
-        - Detailed measurement logging
-        - Progress visualization
-        - Trend analysis
-        - Prediction models
-        
-        **💪 Performance Tracking:**
-        - Strength progression
-        - Exercise-specific metrics
-        - Volume and intensity tracking
-        - Personal records
-        
-        **📸 Progress Photos:**
-        - Visual progress tracking
-        - Before/after comparisons
-        - Timeline visualization
-        - Body composition changes
-        
-        **🔮 Predictions:**
-        - Goal timeline estimates
-        - Progress forecasting
-        - Trend analysis
-        - Smart recommendations
-        """)
+        st.write(f"{icon} **{improvement['exercise']}**: Focus on {improvement['focus']} ({improvement['timeline']})")
+
+def render_comprehensive_reports_tab(user_profile: UserProfile):
+    """Render comprehensive progress reports."""
+    
+    st.markdown("#### � Comprehensive Progress Reports")
+    
+    # Report generation options
+    report_col1, report_col2 = st.columns(2)
+    
+    with report_col1:
+        report_period = st.selectbox(
+            "Report Period",
+            ["Last Week", "Last Month", "Last 3 Months", "Last 6 Months", "All Time"]
+        )
+    
+    with report_col2:
+        report_type = st.selectbox(
+            "Report Type", 
+            ["Complete Summary", "Body Composition Focus", "Performance Focus", "Goal Achievement"]
+        )
+    
+    if st.button("📄 Generate Report"):
+        with st.spinner("Generating comprehensive report..."):
+            # Simulate report generation
+            st.success("✅ Report generated successfully!")
+            
+            # Report sections
+            st.markdown("### 📋 Progress Report Summary")
+            
+            # Executive summary
+            st.markdown("#### 🎯 Executive Summary")
+            st.info(f"""
+            **Report Period:** {report_period}
+            **Report Type:** {report_type}
+            **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+            
+            Your fitness journey shows consistent improvement across multiple metrics. 
+            Key highlights include improved form scores, steady body composition changes, 
+            and strong workout consistency.
+            """)
+            
+            # Key achievements
+            st.markdown("#### 🏆 Key Achievements")
+            achievements = [
+                "✅ Maintained 85%+ workout consistency",
+                "✅ Improved squat form score by 12 points", 
+                "✅ Reduced body fat percentage by 2.1%",
+                "✅ Completed 5 new personal records",
+                "✅ Perfect injury prevention record"
+            ]
+            
+            for achievement in achievements:
+                st.success(achievement)
+            
+            # Areas for improvement
+            st.markdown("#### 🎯 Areas for Continued Focus")
+            focus_areas = [
+                "� Ankle mobility for deeper squat depth",
+                "🔄 Deadlift bar path consistency", 
+                "🔄 Core stability during overhead movements",
+                "🔄 Recovery and sleep optimization"
+            ]
+            
+            for area in focus_areas:
+                st.warning(area)
+            
+            # Download options
+            st.markdown("#### 💾 Export Options")
+            export_col1, export_col2, export_col3 = st.columns(3)
+            
+            with export_col1:
+                if st.button("📄 Export PDF"):
+                    st.info("PDF export feature coming soon")
+            
+            with export_col2:
+                if st.button("📊 Export Data"):
+                    st.info("Data export feature coming soon")
+            
+            with export_col3:
+                if st.button("📧 Email Report"):
+                    st.info("Email feature coming soon")
+
+def render_basic_analytics_tab(user_profile: UserProfile):
+    """Fallback basic analytics when enhanced features unavailable."""
+    
+    st.markdown("### 📊 Basic Analytics")
+    st.info("Enhanced analytics features are not available. Please install required dependencies for full functionality.")
+    
+    # Basic metrics
+    st.markdown("#### 📈 Basic Progress Tracking")
+    
+    basic_cols = st.columns(3)
+    
+    with basic_cols[0]:
+        st.metric("Workouts This Month", "12", "+3")
+    
+    with basic_cols[1]:
+        st.metric("Current Streak", "7 days", "+1")
+    
+    with basic_cols[2]:
+        st.metric("Goals Achieved", "5", "+2")
+    
+    # Simple progress visualization
+    st.markdown("#### 📊 Simple Progress Chart")
+    
+    # Create basic chart
+    import plotly.express as px
+    import pandas as pd
+    
+    # Sample data
+    dates = pd.date_range(start='2024-01-01', end='2024-01-22', freq='D')
+    progress_data = pd.DataFrame({
+        'Date': dates,
+        'Workout_Completed': [1 if i % 3 != 0 else 0 for i in range(len(dates))],
+        'Satisfaction': [7 + (i % 4) + np.random.randint(-1, 2) for i in range(len(dates))]
+    })
+    
+    fig = px.bar(progress_data, x='Date', y='Workout_Completed', 
+                 title="Daily Workout Completion")
+    st.plotly_chart(fig, use_container_width=True)
 
 def initialize_session_state():
     """Initialize Streamlit session state variables."""
@@ -232,6 +491,26 @@ def initialize_session_state():
     # Navigation state
     if 'current_tab' not in st.session_state:
         st.session_state.current_tab = 0
+    
+    # Enhanced features session state
+    if 'show_profile_creation' not in st.session_state:
+        st.session_state.show_profile_creation = False
+    
+    if 'progress_photos_with_analysis' not in st.session_state:
+        st.session_state.progress_photos_with_analysis = []
+    
+    if 'video_form_analysis' not in st.session_state:
+        st.session_state.video_form_analysis = []
+    
+    if 'workout_variations_cache' not in st.session_state:
+        st.session_state.workout_variations_cache = {}
+
+def create_new_profile_callback():
+    """Callback function to trigger new profile creation."""
+    st.session_state.show_profile_creation = True
+    st.session_state.user_profile = None
+    st.session_state.profile_complete = False
+    st.rerun()
 
 def check_user_profile():
     """Check if user has a complete profile."""
@@ -309,6 +588,11 @@ def main():
     st.title("🏋️‍♀️ AI Fitness Assistant Pro")
     st.subheader("Your Intelligent Fitness Companion")
     
+    # Handle profile creation callback
+    if st.session_state.get('show_profile_creation', False):
+        render_profile_setup()
+        return
+    
     # Check if user has completed profile
     if not check_user_profile():
         render_profile_setup()
@@ -381,7 +665,10 @@ def render_sidebar(user_profile: UserProfile):
         st.session_state.profile_complete = False
         st.rerun()
     
-    if st.sidebar.button("📊 Generate New Recommendations"):
+    if st.sidebar.button("� Create New Profile", on_click=create_new_profile_callback):
+        pass  # Callback handles the logic
+    
+    if st.sidebar.button("�📊 Generate New Recommendations"):
         # Clear recommendations cache
         st.session_state.recommendations_cache = {}
         st.success("Recommendations will be regenerated!")
@@ -1036,43 +1323,160 @@ def render_recommendations_tab(user_profile: UserProfile):
         render_basic_recommendations(user_profile)
 
 def render_enhanced_recommendations(recommendations: Dict[str, Any], user_profile: UserProfile):
-    """Render enhanced AI-powered recommendations."""
+    """Render enhanced AI-powered recommendations with 4 distinct program options."""
     
-    st.markdown("### 🤖 AI-Powered Recommendations")
+    st.markdown("### 🤖 AI-Powered Workout Recommendations")
     
-    # Display adaptive recommendations
-    daily_workouts = recommendations.get('daily_workouts', {})
-    workout_varieties = recommendations.get('workout_varieties', {})
+    # Check if we have program options (4 distinct programs)
+    program_options = recommendations.get('program_options', [])
     
-    # Create tabs for different recommendation types
-    rec_tabs = st.tabs(["🎯 Today's Focus", "🔄 Workout Varieties", "📈 Progression Plan"])
+    if program_options and len(program_options) >= 4:
+        st.markdown("#### 🎯 Choose Your Program")
+        st.info("Based on your profile, here are 4 distinctly different workout programs tailored for you:")
+        
+        # Program selection
+        program_tabs = st.tabs([
+            f"Option 1: {program_options[0]['name'][:30]}...",
+            f"Option 2: {program_options[1]['name'][:30]}...", 
+            f"Option 3: {program_options[2]['name'][:30]}...",
+            f"Option 4: {program_options[3]['name'][:30]}..."
+        ])
+        
+        for i, (tab, program) in enumerate(zip(program_tabs, program_options)):
+            with tab:
+                # Program overview
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.markdown(f"**{program['name']}**")
+                    st.write(program['description'])
+                    
+                    # Key details
+                    st.markdown("**Program Details:**")
+                    st.write(f"• Duration: {program['duration_per_session']} min per session")
+                    st.write(f"• Frequency: {program['sessions_per_week']} sessions/week") 
+                    st.write(f"• Style: {program['intensity_style'].replace('_', ' ').title()}")
+                    st.write(f"• Equipment: {', '.join(program['equipment_needed'][:3])}")
+                
+                with col2:
+                    # Differentiation score
+                    diff_score = program.get('differentiation_score', 0.5)
+                    st.metric("Uniqueness", f"{diff_score*100:.0f}%")
+                    
+                    # Best for
+                    st.markdown("**Best For:**")
+                    for item in program.get('best_for', [])[:3]:
+                        st.write(f"• {item}")
+                
+                # Pros and Cons
+                pros_cons_col1, pros_cons_col2 = st.columns(2)
+                
+                with pros_cons_col1:
+                    st.markdown("**✅ Advantages:**")
+                    for pro in program.get('pros', [])[:4]:
+                        st.success(f"• {pro}")
+                
+                with pros_cons_col2:
+                    st.markdown("**⚠️ Considerations:**")
+                    for con in program.get('cons', [])[:4]:
+                        st.warning(f"• {con}")
+                
+                # Sample workout
+                if 'sample_week' in program:
+                    st.markdown("**📋 Sample Week Overview:**")
+                    sample_week = program['sample_week']
+                    
+                    if 'monday' in sample_week:
+                        monday_workout = sample_week['monday']
+                        with st.expander(f"Sample: {monday_workout['workout_name']}", expanded=False):
+                            st.write(f"**Duration:** {monday_workout['duration']} minutes")
+                            st.write(f"**Structure:** {monday_workout['structure']}")
+                            st.write(f"**Focus:** {monday_workout['focus']}")
+                            
+                            if 'exercises' in monday_workout:
+                                st.markdown("**Key Exercises:**")
+                                for ex in monday_workout['exercises'][:3]:
+                                    st.write(f"• {ex['name']}: {ex.get('sets', '')} sets x {ex.get('reps', ex.get('duration', 'N/A'))}")
+                
+                # Selection button
+                if st.button(f"Select Option {i+1}", key=f"select_program_{i}"):
+                    st.session_state.selected_program = program
+                    st.success(f"✅ Selected: {program['name']}")
+                    st.rerun()
+        
+        # Program comparison
+        if st.checkbox("📊 Compare All Programs"):
+            comparison = recommendations.get('program_comparison', {})
+            if comparison:
+                st.markdown("#### � Program Comparison")
+                
+                # Create comparison table
+                comparison_data = []
+                for i, program in enumerate(program_options):
+                    comparison_data.append({
+                        'Program': f"Option {i+1}",
+                        'Name': program['name'][:40],
+                        'Duration': f"{program['duration_per_session']} min",
+                        'Frequency': f"{program['sessions_per_week']}/week",
+                        'Equipment': ', '.join(program['equipment_needed'][:2]),
+                        'Style': program['intensity_style'].replace('_', ' ').title()
+                    })
+                
+                import pandas as pd
+                df = pd.DataFrame(comparison_data)
+                st.dataframe(df, use_container_width=True)
+                
+                # Key differences
+                st.markdown("**🔍 Key Differences:**")
+                for diff in comparison.get('key_differences', []):
+                    st.write(f"• {diff}")
     
-    with rec_tabs[0]:
-        st.markdown("#### Today's Recommended Workout")
+    # Show selected program details
+    if 'selected_program' in st.session_state:
+        st.markdown("---")
+        st.markdown("### 🎯 Your Selected Program")
+        
+        selected = st.session_state.selected_program
+        st.success(f"Currently using: **{selected['name']}**")
+        
+        # Show today's workout if available
+        daily_workouts = recommendations.get('daily_workouts', {})
         if daily_workouts:
+            st.markdown("#### Today's Workout")
             for workout_type, workout_details in daily_workouts.items():
-                with st.expander(f"{workout_type.replace('_', ' ').title()}", expanded=True):
+                with st.expander(f"Today: {workout_type.replace('_', ' ').title()}", expanded=True):
                     if isinstance(workout_details, dict) and 'exercises' in workout_details:
                         for exercise in workout_details['exercises']:
                             st.markdown(f"**{exercise.get('name', 'Exercise')}**")
                             st.markdown(f"Sets: {exercise.get('sets', 'N/A')} | Reps: {exercise.get('reps', 'N/A')}")
                             
                             if exercise.get('technique_cues'):
-                                st.caption("Key cues: " + ", ".join(exercise['technique_cues'][:2]))
+                                st.caption("💡 " + ", ".join(exercise['technique_cues'][:2]))
     
-    with rec_tabs[1]:
-        st.markdown("#### Alternative Workout Options")
-        if workout_varieties:
-            for variety_name, variety_details in workout_varieties.items():
-                st.markdown(f"**{variety_name.replace('_', ' ').title()}**")
-                st.markdown(variety_details.get('description', 'Alternative workout option'))
-    
-    with rec_tabs[2]:
-        st.markdown("#### Your Progression Plan")
-        progression_plan = recommendations.get('progression_plan', {})
-        if progression_plan:
-            for week, plan in progression_plan.items():
-                st.markdown(f"**Week {week}:** {plan}")
+    # Workout varieties section  
+    workout_varieties = recommendations.get('workout_varieties', {})
+    if workout_varieties:
+        st.markdown("### 🔄 Alternative Workout Options")
+        st.info("When you want to mix things up, try these alternatives:")
+        
+        variety_cols = st.columns(2)
+        for i, (variety_name, variety_details) in enumerate(workout_varieties.items()):
+            col = variety_cols[i % 2]
+            
+            with col:
+                with st.expander(f"🔄 {variety_details.get('name', variety_name)}", expanded=False):
+                    st.write(variety_details.get('description', 'Alternative workout option'))
+                    st.write(f"**Duration:** {variety_details.get('duration', 'N/A')} minutes")
+                    st.write(f"**Calorie Burn:** {variety_details.get('calorie_burn', 'Moderate')}")
+                    st.write(f"**Best When:** {variety_details.get('best_when', 'Anytime')}")
+                    
+                    # Show sample workout
+                    if 'sample_workout' in variety_details:
+                        sample = variety_details['sample_workout']
+                        if 'exercises' in sample:
+                            st.markdown("**Sample Exercises:**")
+                            for ex in sample['exercises'][:3]:
+                                st.write(f"• {ex}")
     
     # User analysis insights
     user_analysis = recommendations.get('user_analysis', {})

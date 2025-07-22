@@ -121,40 +121,591 @@ class EnhancedRecommendationEngine:
         """Generate adaptive recommendations based on user history and preferences."""
         
         try:
-            # Analyze user data
+            # Analyze user data comprehensively
             user_analysis = self._analyze_user_comprehensively(user_profile, workout_history)
             
-            # Get base recommendations
-            base_recommendations = self._get_base_recommendations(user_profile)
+            # Generate 4 distinct program options with clear differentiation
+            program_options = self._create_distinct_program_options(user_profile, user_analysis)
             
-            # Apply adaptive algorithms
+            # Ensure we have at least one program option
+            if not program_options or not isinstance(program_options, list):
+                raise ValueError("Failed to generate program options")
+            
+            # Apply adaptive algorithms to selected program
+            selected_program = program_options[0]  # Default to first option
             adaptive_recommendations = self._apply_adaptive_algorithms(
-                base_recommendations, user_analysis, preferences or {}
+                selected_program, user_analysis, preferences or {}
             )
             
-            # Create workout varieties
-            workout_varieties = self._create_workout_varieties(
-                adaptive_recommendations, user_profile
+            # Create detailed workout varieties with significant differences
+            workout_varieties = self._create_detailed_workout_varieties(
+                adaptive_recommendations, user_profile, user_analysis
             )
             
-            # Generate progression plan
-            progression_plan = self._create_detailed_progression_plan(
-                user_profile, adaptive_recommendations
+            # Generate detailed progression plan
+            progression_plan = self._create_comprehensive_progression_plan(
+                user_profile, adaptive_recommendations, user_analysis
             )
             
             return {
+                'program_options': program_options,  # 4 distinct options
+                'selected_program': adaptive_recommendations,
                 'daily_workouts': adaptive_recommendations,
                 'workout_varieties': workout_varieties,
                 'progression_plan': progression_plan,
                 'user_analysis': user_analysis,
-                'adaptation_notes': self._generate_adaptation_notes(user_analysis),
-                'recovery_recommendations': self._get_recovery_recommendations(user_profile),
-                'nutrition_timing': self._get_nutrition_timing_recommendations(user_profile)
+                'adaptation_notes': self._generate_detailed_adaptation_notes(user_analysis),
+                'recovery_recommendations': self._get_advanced_recovery_recommendations(user_profile),
+                'nutrition_timing': self._get_detailed_nutrition_timing(user_profile),
+                'program_comparison': self._compare_program_options(program_options)
             }
             
         except Exception as e:
             logger.error(f"Error generating adaptive recommendations: {e}")
             return {'error': f'Failed to generate recommendations: {str(e)}'}
+    
+    def _create_distinct_program_options(self, user_profile: UserProfile, 
+                                       user_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Create 4 distinctly different program options based on user profile."""
+        
+        base_goal = user_profile.primary_goal.value
+        fitness_level = user_profile.fitness_level.value
+        available_time = getattr(user_profile, 'available_time', 60)
+        
+        options = []
+        
+        # Option 1: Time-Efficient High-Intensity Program
+        option1 = {
+            'name': f'High-Intensity {base_goal.replace("_", " ").title()} (30-45 min)',
+            'description': 'Maximum results in minimal time using compound movements and supersets',
+            'duration_per_session': 35,
+            'sessions_per_week': 4,
+            'intensity_style': 'high_intensity_intervals',
+            'focus_areas': ['compound_movements', 'metabolic_conditioning', 'time_efficiency'],
+            'training_methods': ['supersets', 'circuits', 'HIIT', 'compound_lifts'],
+            'equipment_needed': ['dumbbells', 'resistance_bands', 'bodyweight'],
+            'sample_week': self._generate_sample_week(user_profile, 'high_intensity', user_analysis),
+            'pros': ['Time efficient', 'High calorie burn', 'Improved conditioning', 'Minimal equipment'],
+            'cons': ['High intensity may be challenging', 'Requires good recovery', 'Advanced techniques'],
+            'best_for': ['Busy schedule', 'Intermediate to advanced', 'Quick results'],
+            'progression_style': 'intensity_based'
+        }
+        
+        # Option 2: Balanced Volume Program
+        option2 = {
+            'name': f'Balanced {base_goal.replace("_", " ").title()} Builder (45-60 min)',
+            'description': 'Well-rounded approach balancing strength, endurance, and flexibility',
+            'duration_per_session': 55,
+            'sessions_per_week': 5,
+            'intensity_style': 'moderate_progressive',
+            'focus_areas': ['strength_building', 'endurance', 'flexibility', 'muscle_balance'],
+            'training_methods': ['progressive_overload', 'periodization', 'functional_movements'],
+            'equipment_needed': ['full_gym', 'weights', 'cardio_equipment'],
+            'sample_week': self._generate_sample_week(user_profile, 'balanced_volume', user_analysis),
+            'pros': ['Comprehensive development', 'Steady progress', 'Balanced approach', 'Sustainable'],
+            'cons': ['Longer sessions', 'More gym access needed', 'Slower dramatic changes'],
+            'best_for': ['Gym access', 'All fitness levels', 'Long-term development'],
+            'progression_style': 'volume_and_intensity'
+        }
+        
+        # Option 3: Specialized Focus Program  
+        option3 = self._create_specialized_focus_program(user_profile, user_analysis)
+        
+        # Option 4: Adaptive Home/Minimal Equipment Program
+        option4 = {
+            'name': f'Home-Based {base_goal.replace("_", " ").title()} (40-50 min)',
+            'description': 'Effective training using minimal equipment and bodyweight exercises',
+            'duration_per_session': 45,
+            'sessions_per_week': 5,
+            'intensity_style': 'bodyweight_progressive',
+            'focus_areas': ['bodyweight_mastery', 'functional_strength', 'mobility'],
+            'training_methods': ['bodyweight_progressions', 'isometric_holds', 'plyometrics'],
+            'equipment_needed': ['resistance_bands', 'yoga_mat', 'bodyweight_only'],
+            'sample_week': self._generate_sample_week(user_profile, 'home_bodyweight', user_analysis),
+            'pros': ['No gym needed', 'Equipment minimal', 'Convenient', 'Travel friendly'],
+            'cons': ['Limited progression options', 'Requires creativity', 'May plateau'],
+            'best_for': ['Home workouts', 'Travel frequently', 'Minimal equipment'],
+            'progression_style': 'skill_and_volume_based'
+        }
+        
+        options = [option1, option2, option3, option4]
+        
+        # Add detailed differentiation based on user analysis
+        return self._enhance_program_differentiation(options, user_profile, user_analysis)
+    
+    def _create_specialized_focus_program(self, user_profile: UserProfile,
+                                        user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a specialized program based on user's specific goals and analysis."""
+        
+        goal = user_profile.primary_goal.value
+        
+        if goal == 'strength':
+            return {
+                'name': 'Pure Strength Powerbuilding (60-75 min)',
+                'description': 'Focused on maximum strength gains with powerlifting principles',
+                'duration_per_session': 70,
+                'sessions_per_week': 4,
+                'intensity_style': 'strength_focused',
+                'focus_areas': ['max_strength', 'powerlifts', 'neural_adaptation'],
+                'training_methods': ['linear_periodization', 'heavy_singles', 'strength_blocks'],
+                'equipment_needed': ['barbell', 'plates', 'power_rack', 'bench'],
+                'sample_week': self._generate_sample_week(user_profile, 'strength_focused', user_analysis),
+                'pros': ['Maximum strength gains', 'Clear progression', 'Proven methods'],
+                'cons': ['Requires experience', 'Equipment intensive', 'Long sessions'],
+                'best_for': ['Strength goals', 'Experienced lifters', 'Competition prep'],
+                'progression_style': 'load_based'
+            }
+        elif goal == 'weight_loss':
+            return {
+                'name': 'Metabolic Fat-Loss System (45-55 min)',
+                'description': 'High-volume, metabolic conditioning for maximum fat loss',
+                'duration_per_session': 50,
+                'sessions_per_week': 6,
+                'intensity_style': 'metabolic_emphasis',
+                'focus_areas': ['fat_loss', 'metabolic_conditioning', 'cardio_strength'],
+                'training_methods': ['metabolic_circuits', 'HIIT', 'fasted_cardio', 'density_training'],
+                'equipment_needed': ['cardio_equipment', 'light_weights', 'kettlebells'],
+                'sample_week': self._generate_sample_week(user_profile, 'fat_loss_focused', user_analysis),
+                'pros': ['Rapid fat loss', 'High calorie burn', 'Improved conditioning'],
+                'cons': ['Very demanding', 'Requires good nutrition', 'Recovery intensive'],
+                'best_for': ['Fat loss focus', 'Good fitness base', 'Dedicated mindset'],
+                'progression_style': 'density_and_complexity'
+            }
+        elif goal == 'muscle_gain':
+            return {
+                'name': 'Hypertrophy Specialization (55-70 min)',
+                'description': 'High-volume bodybuilding approach for maximum muscle growth',
+                'duration_per_session': 65,
+                'sessions_per_week': 5,
+                'intensity_style': 'hypertrophy_focused',
+                'focus_areas': ['muscle_growth', 'volume_accumulation', 'mind_muscle_connection'],
+                'training_methods': ['volume_periodization', 'isolation_emphasis', 'drop_sets'],
+                'equipment_needed': ['full_gym', 'cables', 'dumbbells', 'machines'],
+                'sample_week': self._generate_sample_week(user_profile, 'hypertrophy_focused', user_analysis),
+                'pros': ['Maximum muscle growth', 'Physique development', 'Variety of exercises'],
+                'cons': ['Time intensive', 'Gym dependent', 'Recovery demanding'],
+                'best_for': ['Muscle building', 'Physique goals', 'Intermediate+'],
+                'progression_style': 'volume_progression'
+            }
+        else:  # endurance or general fitness
+            return {
+                'name': 'Athletic Performance System (50-65 min)',
+                'description': 'Sport-specific conditioning and functional movement patterns',
+                'duration_per_session': 58,
+                'sessions_per_week': 5,
+                'intensity_style': 'athletic_performance',
+                'focus_areas': ['athletic_performance', 'functional_movement', 'sport_specific'],
+                'training_methods': ['functional_training', 'plyometrics', 'movement_prep'],
+                'equipment_needed': ['functional_equipment', 'agility_tools', 'varied_implements'],
+                'sample_week': self._generate_sample_week(user_profile, 'athletic_performance', user_analysis),
+                'pros': ['Real-world application', 'Injury prevention', 'Athletic development'],
+                'cons': ['Complex movements', 'Requires coaching', 'Equipment variety'],
+                'best_for': ['Athletes', 'Functional goals', 'Movement quality'],
+                'progression_style': 'skill_and_performance'
+            }
+    
+    def _generate_sample_week(self, user_profile: UserProfile, program_style: str,
+                            user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a detailed sample week for the specific program style."""
+        
+        # Available sample week methods
+        available_methods = {
+            'high_intensity': self._create_hiit_sample_week,
+            'balanced_volume': self._create_balanced_sample_week,
+        }
+        
+        # Use specific method if available, otherwise use balanced as fallback
+        method = available_methods.get(program_style, self._create_balanced_sample_week)
+        return method(user_profile, user_analysis)
+    
+    def _create_hiit_sample_week(self, user_profile: UserProfile, 
+                               user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a sample HIIT week with specific exercises and timing."""
+        
+        return {
+            'monday': {
+                'workout_name': 'Full Body HIIT Circuit',
+                'duration': 35,
+                'structure': '4 rounds, 45 sec work / 15 sec rest',
+                'exercises': [
+                    {'name': 'Burpee to Jump Squat', 'sets': '4', 'duration': '45 sec', 'rest': '15 sec',
+                     'intensity': 'High', 'muscle_groups': ['full_body'], 'calories_est': 12},
+                    {'name': 'Push-up to T-Rotation', 'sets': '4', 'duration': '45 sec', 'rest': '15 sec',
+                     'intensity': 'High', 'muscle_groups': ['chest', 'shoulders', 'core'], 'calories_est': 10},
+                    {'name': 'Mountain Climber to Plank Jack', 'sets': '4', 'duration': '45 sec', 'rest': '15 sec',
+                     'intensity': 'High', 'muscle_groups': ['core', 'legs'], 'calories_est': 11},
+                    {'name': 'Dumbbell Thrusters', 'sets': '4', 'duration': '45 sec', 'rest': '15 sec',
+                     'intensity': 'High', 'muscle_groups': ['legs', 'shoulders'], 'calories_est': 13}
+                ],
+                'warm_up': ['Dynamic stretching (5 min)', 'Joint mobility', 'Light cardio'],
+                'cool_down': ['Static stretching (5 min)', 'Deep breathing'],
+                'estimated_calories': 280,
+                'focus': 'Metabolic conditioning and full-body strength'
+            },
+            'tuesday': {
+                'workout_name': 'Upper Body Power Circuit',
+                'duration': 30,
+                'structure': '5 rounds, 40 sec work / 20 sec rest',
+                'exercises': [
+                    {'name': 'Explosive Push-ups', 'sets': '5', 'duration': '40 sec', 'rest': '20 sec',
+                     'intensity': 'High', 'muscle_groups': ['chest', 'triceps'], 'calories_est': 8},
+                    {'name': 'Dumbbell High Pulls', 'sets': '5', 'duration': '40 sec', 'rest': '20 sec',
+                     'intensity': 'High', 'muscle_groups': ['back', 'shoulders'], 'calories_est': 10},
+                    {'name': 'Battle Rope Alternating Waves', 'sets': '5', 'duration': '40 sec', 'rest': '20 sec',
+                     'intensity': 'High', 'muscle_groups': ['shoulders', 'core'], 'calories_est': 12}
+                ],
+                'warm_up': ['Arm circles', 'Shoulder dislocations', 'Band pull-aparts'],
+                'cool_down': ['Upper body stretching', 'Foam rolling'],
+                'estimated_calories': 220,
+                'focus': 'Upper body power and explosiveness'
+            },
+            'rest_days': ['Wednesday', 'Saturday', 'Sunday'],
+            'weekly_volume': '4 sessions, 140 total minutes',
+            'weekly_calorie_estimate': 1200
+        }
+    
+    def _create_balanced_sample_week(self, user_profile: UserProfile,
+                                   user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a balanced training sample week."""
+        
+        return {
+            'monday': {
+                'workout_name': 'Upper Body Strength',
+                'duration': 55,
+                'structure': '3-4 sets of 8-12 reps with 2-3 min rest',
+                'exercises': [
+                    {'name': 'Bench Press or Push-ups', 'sets': '4', 'reps': '8-10', 'rest': '2-3 min',
+                     'intensity': 'Moderate-High', 'muscle_groups': ['chest', 'triceps'], 'weight_guidance': '75-85% 1RM'},
+                    {'name': 'Bent-Over Rows', 'sets': '4', 'reps': '8-10', 'rest': '2-3 min',
+                     'intensity': 'Moderate-High', 'muscle_groups': ['back', 'biceps'], 'weight_guidance': '75-80% 1RM'},
+                    {'name': 'Overhead Press', 'sets': '3', 'reps': '10-12', 'rest': '2 min',
+                     'intensity': 'Moderate', 'muscle_groups': ['shoulders'], 'weight_guidance': '70-75% 1RM'},
+                    {'name': 'Lat Pulldowns', 'sets': '3', 'reps': '12-15', 'rest': '90 sec',
+                     'intensity': 'Moderate', 'muscle_groups': ['back'], 'weight_guidance': '65-75% 1RM'}
+                ],
+                'warm_up': ['10 min cardio', 'Dynamic upper body stretches', 'Light weights preparation'],
+                'cool_down': ['Upper body stretching', '5 min walk'],
+                'estimated_calories': 280,
+                'focus': 'Upper body strength and muscle development'
+            },
+            'tuesday': {
+                'workout_name': 'Lower Body & Core',
+                'duration': 55,
+                'structure': '3-4 sets of 8-12 reps with 2-3 min rest',
+                'exercises': [
+                    {'name': 'Squats', 'sets': '4', 'reps': '8-12', 'rest': '3 min',
+                     'intensity': 'High', 'muscle_groups': ['quadriceps', 'glutes'], 'weight_guidance': '75-85% 1RM'},
+                    {'name': 'Romanian Deadlifts', 'sets': '3', 'reps': '10-12', 'rest': '2-3 min',
+                     'intensity': 'Moderate-High', 'muscle_groups': ['hamstrings', 'glutes'], 'weight_guidance': '70-80% 1RM'},
+                    {'name': 'Walking Lunges', 'sets': '3', 'reps': '12 each leg', 'rest': '2 min',
+                     'intensity': 'Moderate', 'muscle_groups': ['legs', 'glutes'], 'weight_guidance': 'Bodyweight + weight'},
+                    {'name': 'Plank Variations', 'sets': '3', 'duration': '30-45 sec', 'rest': '60 sec',
+                     'intensity': 'Moderate', 'muscle_groups': ['core'], 'weight_guidance': 'Bodyweight'}
+                ],
+                'warm_up': ['10 min cardio', 'Leg swings', 'Hip mobility'],
+                'cool_down': ['Lower body stretching', 'Hip flexor stretches'],
+                'estimated_calories': 320,
+                'focus': 'Lower body strength and core stability'
+            },
+            'rest_days': ['Wednesday', 'Saturday', 'Sunday'],
+            'weekly_volume': '5 sessions, 275 total minutes',
+            'weekly_calorie_estimate': 1400
+        }
+    
+    def _enhance_program_differentiation(self, options: List[Dict], user_profile: UserProfile,
+                                       user_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Enhance program differentiation with user-specific adaptations."""
+        
+        # Add user-specific modifications to each option
+        fitness_level = user_profile.fitness_level.value
+        goal = user_profile.primary_goal.value
+        
+        for i, option in enumerate(options):
+            # Adjust complexity based on fitness level
+            if fitness_level == 'beginner':
+                option['beginner_modifications'] = [
+                    'Start with bodyweight versions',
+                    'Reduce volume by 20%',
+                    'Focus on form over intensity',
+                    'Add extra rest days'
+                ]
+            elif fitness_level == 'advanced':
+                option['advanced_enhancements'] = [
+                    'Add advanced techniques (drop sets, supersets)',
+                    'Increase training frequency',
+                    'Include skill-based movements',
+                    'Higher training loads'
+                ]
+            
+            # Add goal-specific adaptations
+            option['goal_adaptations'] = self._get_goal_specific_adaptations(goal, option['name'])
+            
+            # Add uniqueness score to ensure differentiation
+            option['differentiation_score'] = self._calculate_differentiation_score(option, options, i)
+        
+        return options
+    
+    def _get_goal_specific_adaptations(self, goal: str, program_name: str) -> List[str]:
+        """Get specific adaptations based on user's primary goal."""
+        
+        adaptations = {
+            'weight_loss': [
+                'Higher calorie burn emphasis',
+                'Metabolic conditioning circuits',
+                'Shorter rest periods',
+                'Cardio integration'
+            ],
+            'muscle_gain': [
+                'Progressive overload focus',
+                'Higher training volume',
+                'Compound movement emphasis',
+                'Adequate rest for recovery'
+            ],
+            'strength': [
+                'Heavy compound lifts',
+                'Lower rep ranges (1-5)',
+                'Longer rest periods',
+                'Powerlifting techniques'
+            ],
+            'endurance': [
+                'Higher volume training',
+                'Circuit training',
+                'Cardiovascular integration',
+                'Endurance-specific protocols'
+            ]
+        }
+        
+        return adaptations.get(goal, ['General fitness adaptations'])
+    
+    def _calculate_differentiation_score(self, option: Dict, all_options: List[Dict], index: int) -> float:
+        """Calculate how different this option is from others."""
+        
+        # Factors that make programs different
+        unique_factors = [
+            'duration_per_session',
+            'sessions_per_week', 
+            'intensity_style',
+            'training_methods',
+            'equipment_needed'
+        ]
+        
+        differentiation = 0.0
+        for other_i, other_option in enumerate(all_options):
+            if other_i != index:
+                for factor in unique_factors:
+                    if option.get(factor) != other_option.get(factor):
+                        differentiation += 0.2
+        
+        return min(differentiation, 1.0)  # Cap at 1.0
+    
+    def _compare_program_options(self, options: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Create a comparison matrix of the program options."""
+        
+        comparison = {
+            'time_commitment': {},
+            'intensity_levels': {},
+            'equipment_requirements': {},
+            'suitability': {},
+            'key_differences': []
+        }
+        
+        for i, option in enumerate(options):
+            option_name = option.get('name', f'Option {i+1}')
+            
+            # Safely access duration and sessions
+            duration = option.get('duration_per_session', 'Unknown')
+            sessions = option.get('sessions_per_week', 'Unknown')
+            comparison['time_commitment'][option_name] = f"{duration} min x {sessions}/week"
+            
+            # Safely access intensity style
+            comparison['intensity_levels'][option_name] = option.get('intensity_style', 'Not specified')
+            
+            # Safely access equipment list
+            equipment = option.get('equipment_needed', [])
+            if isinstance(equipment, list):
+                equipment_str = ', '.join(equipment[:3]) if equipment else 'No equipment specified'
+            else:
+                equipment_str = 'Equipment info unavailable'
+            comparison['equipment_requirements'][option_name] = equipment_str
+            
+            # Safely access best_for list
+            best_for = option.get('best_for', [])
+            if isinstance(best_for, list):
+                suitability_str = ', '.join(best_for[:2]) if best_for else 'General fitness'
+            else:
+                suitability_str = 'Suitability info unavailable'
+            comparison['suitability'][option_name] = suitability_str
+        
+        # Highlight key differences
+        key_differences = []
+        
+        # Safely access option 1
+        if len(options) > 0 and 'duration_per_session' in options[0]:
+            key_differences.append(f"Option 1 focuses on time efficiency with {options[0]['duration_per_session']} min sessions")
+        
+        # Safely access option 2
+        if len(options) > 1 and 'sessions_per_week' in options[1]:
+            key_differences.append(f"Option 2 provides comprehensive development with {options[1]['sessions_per_week']} sessions/week")
+        
+        # Safely access option 3 - check if focus_areas exists and is a list with elements
+        if len(options) > 2 and 'focus_areas' in options[2]:
+            focus_areas = options[2]['focus_areas']
+            if isinstance(focus_areas, list) and len(focus_areas) > 0:
+                key_differences.append(f"Option 3 specializes in {focus_areas[0].replace('_', ' ')}")
+            else:
+                key_differences.append("Option 3 offers specialized training")
+        
+        # Safely access option 4
+        if len(options) > 3 and 'equipment_needed' in options[3]:
+            equipment = options[3]['equipment_needed']
+            if isinstance(equipment, list) and len(equipment) > 0:
+                key_differences.append(f"Option 4 requires minimal equipment: {', '.join(equipment)}")
+            else:
+                key_differences.append("Option 4 uses minimal equipment")
+        
+        comparison['key_differences'] = key_differences
+        
+        return comparison
+    
+    def _create_detailed_workout_varieties(self, recommendations: Dict, user_profile: UserProfile,
+                                         user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create significantly different workout varieties based on user profile."""
+        
+        goal = user_profile.primary_goal.value
+        fitness_level = user_profile.fitness_level.value
+        
+        # Create truly different workout varieties
+        varieties = {}
+        
+        # Variety 1: Time-Based Alternative
+        varieties['quick_hiit_option'] = {
+            'name': '20-Minute HIIT Blast',
+            'description': 'When you\'re short on time but need maximum impact',
+            'duration': 20,
+            'style': 'high_intensity_circuits',
+            'calorie_burn': 'High (250-300 calories)',
+            'sample_workout': {
+                'warm_up': '3 minutes dynamic movement',
+                'main_set': '4 rounds x (3 min work, 1 min rest)',
+                'exercises': [
+                    'Jump squats x 30 seconds',
+                    'Burpees x 30 seconds', 
+                    'Mountain climbers x 30 seconds',
+                    'Push-ups x 30 seconds',
+                    'High knees x 30 seconds',
+                    'Rest x 30 seconds'
+                ],
+                'cool_down': '2 minutes stretching'
+            },
+            'best_when': 'Limited time, high energy, need metabolic boost'
+        }
+        
+        # Variety 2: Strength-Focused Alternative
+        varieties['strength_power_option'] = {
+            'name': 'Strength & Power Development',
+            'description': 'Focus on building maximum strength and explosive power',
+            'duration': 60,
+            'style': 'strength_power_emphasis',
+            'calorie_burn': 'Moderate (200-250 calories)',
+            'sample_workout': {
+                'warm_up': '10 minutes specific movement prep',
+                'main_set': 'Strength (5x3-5 reps) + Power (3x5 reps)',
+                'exercises': [
+                    'Back Squats: 5 sets x 3-5 reps (85-90% 1RM)',
+                    'Bench Press: 5 sets x 3-5 reps (85-90% 1RM)',
+                    'Power Cleans: 3 sets x 5 reps (70-75% 1RM)',
+                    'Box Jumps: 3 sets x 5 reps (explosive)',
+                    'Core Stability: 3 sets x 30-45 seconds'
+                ],
+                'cool_down': '5 minutes mobility work'
+            },
+            'best_when': 'Feeling strong, want to test limits, strength goals priority'
+        }
+        
+        # Variety 3: Recovery/Active Rest Alternative
+        varieties['active_recovery_option'] = {
+            'name': 'Active Recovery & Mobility',
+            'description': 'Light movement to promote recovery and flexibility',
+            'duration': 30,
+            'style': 'recovery_mobility',
+            'calorie_burn': 'Low (100-150 calories)',
+            'sample_workout': {
+                'warm_up': '5 minutes gentle movement',
+                'main_set': 'Flow-based mobility and light exercises',
+                'exercises': [
+                    'Yoga flow sequence x 5 minutes',
+                    'Foam rolling x 5 minutes',
+                    'Light walking or cycling x 10 minutes',
+                    'Deep breathing and stretching x 5 minutes'
+                ],
+                'cool_down': '5 minutes meditation'
+            },
+            'best_when': 'Feeling tired, sore muscles, stress relief needed'
+        }
+        
+        # Variety 4: Sport-Specific/Functional Alternative
+        varieties['functional_athletic_option'] = {
+            'name': 'Functional Athletic Training',
+            'description': 'Movement-based training for real-world strength and agility',
+            'duration': 45,
+            'style': 'functional_movement',
+            'calorie_burn': 'Moderate-High (220-280 calories)',
+            'sample_workout': {
+                'warm_up': '8 minutes dynamic movement preparation',
+                'main_set': 'Movement complexes and skills',
+                'exercises': [
+                    'Turkish Get-ups x 3 each side',
+                    'Farmer\'s Walks x 40 meters x 3 sets',
+                    'Single-leg deadlifts x 8 each leg',
+                    'Bear crawl to crab walk x 20 meters',
+                    'Agility ladder or cone drills x 5 minutes'
+                ],
+                'cool_down': '7 minutes full-body stretching'
+            },
+            'best_when': 'Want to move differently, improve real-world strength'
+        }
+        
+        # Add user-specific customizations
+        for variety_name, variety in varieties.items():
+            variety['user_customizations'] = self._get_variety_customizations(
+                variety, user_profile, user_analysis
+            )
+        
+        return varieties
+    
+    def _get_variety_customizations(self, variety: Dict, user_profile: UserProfile,
+                                  user_analysis: Dict[str, Any]) -> List[str]:
+        """Get user-specific customizations for workout varieties."""
+        
+        customizations = []
+        fitness_level = user_profile.fitness_level.value
+        goal = user_profile.primary_goal.value
+        
+        # Fitness level customizations
+        if fitness_level == 'beginner':
+            customizations.extend([
+                'Reduce intensity by 20%',
+                'Add 30-second rest between exercises',
+                'Focus on form over speed/weight'
+            ])
+        elif fitness_level == 'advanced':
+            customizations.extend([
+                'Increase complexity with combination movements',
+                'Add resistance or speed challenges',
+                'Include unilateral (single-limb) variations'
+            ])
+        
+        # Goal-specific customizations
+        goal_mods = {
+            'weight_loss': ['Add cardio intervals', 'Minimize rest periods', 'Increase movement tempo'],
+            'muscle_gain': ['Add resistance', 'Focus on controlled tempo', 'Include isolation exercises'],
+            'strength': ['Increase load/resistance', 'Longer rest periods', 'Fewer reps, more sets'],
+            'endurance': ['Extend duration', 'Add cardio components', 'Higher repetitions']
+        }
+        
+        customizations.extend(goal_mods.get(goal, []))
+        
+        return customizations[:4]  # Limit to top 4 customizations
     
     def _create_periodization_phases(self, user_profile: UserProfile, 
                                    total_weeks: int) -> List[WorkoutPhase]:
@@ -381,7 +932,7 @@ class EnhancedRecommendationEngine:
         )
         
         # Calculate durations
-        base_duration = user_profile.available_time
+        base_duration = getattr(user_profile, 'available_time', 60)
         warm_up_duration = max(5, base_duration // 8)
         cool_down_duration = max(5, base_duration // 10)
         main_workout_duration = base_duration - warm_up_duration - cool_down_duration
@@ -656,7 +1207,17 @@ class EnhancedRecommendationEngine:
         else:
             rep_type = 'endurance'
         
-        min_reps, max_reps = rep_ranges[rep_type][user_profile.fitness_level]
+        # Convert fitness level to enum if it's a string/int
+        if isinstance(user_profile.fitness_level, str):
+            fitness_level = FitnessLevel(user_profile.fitness_level)
+        elif isinstance(user_profile.fitness_level, int):
+            # Map integer to fitness level (0=beginner, 1=intermediate, 2=advanced)
+            level_map = {0: FitnessLevel.BEGINNER, 1: FitnessLevel.INTERMEDIATE, 2: FitnessLevel.ADVANCED}
+            fitness_level = level_map.get(user_profile.fitness_level, FitnessLevel.BEGINNER)
+        else:
+            fitness_level = user_profile.fitness_level
+        
+        min_reps, max_reps = rep_ranges[rep_type][fitness_level]
         
         # Apply intensity modifier
         if phase.intensity_percentage > 85:
@@ -797,7 +1358,7 @@ class EnhancedRecommendationEngine:
                 'category': 'cardio',
                 'muscle_groups': ex.muscle_groups,
                 'equipment_needed': ex.equipment_needed,
-                'duration': user_profile.available_time - 10,  # Leave time for warm-up/cool-down
+                'duration': getattr(user_profile, 'available_time', 60) - 10,  # Leave time for warm-up/cool-down
                 'intensity': 'moderate',
                 'technique_cues': ex.technique_cues,
                 'progressions': ex.progressions
@@ -1158,10 +1719,11 @@ class EnhancedRecommendationEngine:
     
     def _analyze_time_availability(self, user_profile: UserProfile) -> Dict[str, Any]:
         """Analyze time constraints."""
+        available_time = getattr(user_profile, 'available_time', 60)
         return {
-            'available_time': user_profile.available_time,
+            'available_time': available_time,
             'workout_frequency': user_profile.workout_days_per_week,
-            'time_efficiency_needed': user_profile.available_time < 45
+            'time_efficiency_needed': available_time < 45
         }
     
     def _analyze_injuries(self, user_profile: UserProfile) -> Dict[str, Any]:
@@ -1201,7 +1763,8 @@ class EnhancedRecommendationEngine:
         """Identify potential barriers to success."""
         barriers = []
         
-        if user_profile.available_time < 30:
+        available_time = getattr(user_profile, 'available_time', 60)
+        if available_time < 30:
             barriers.append('Limited time availability')
         
         equipment = getattr(user_profile, 'available_equipment', [])
