@@ -1,8 +1,9 @@
-# APT Fitness Assistant - Core Dependencies
-# Generated from pyproject.toml for UV package manager
+# APT Fitness Assistant - Complete Dependencies
+# Updated for restructured modular architecture
 
 # Core web framework
 streamlit>=1.29.0
+streamlit-option-menu>=0.3.0
 
 # Computer vision and AI
 opencv-python>=4.9.0.80
@@ -29,7 +30,10 @@ opencv-contrib-python>=4.8.0
 imageio>=2.31.0
 scikit-image>=0.21.0
 
-# Web API
+# Database and persistence
+# sqlite3 is included in Python standard library
+
+# Web API (optional for future API endpoints)
 flask>=2.3.0
 flask-sqlalchemy>=3.0.0
 flask-cors>=4.0.0
@@ -38,3 +42,10 @@ werkzeug>=2.3.0
 # Utilities
 python-dateutil>=2.8.2
 typing-extensions>=4.0.0
+pathlib2>=2.3.0
+
+# Development dependencies (optional)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+flake8>=6.0.0

@@ -38,6 +38,22 @@ class EnhancedFitnessUI:
             self.recipe_manager = RecipeManager()
         self._initialize_session_state()
     
+    def _safe_get_enum_value(self, value):
+        """Safely get the value from an enum, or return the object if it's already a string."""
+        if value is None:
+            return 'general_fitness'
+        
+        # If it has a value attribute (enum), return the value
+        if hasattr(value, 'value'):
+            return value.value
+        
+        # If it's already a string, return it
+        if isinstance(value, str):
+            return value
+        
+        # For any other type, convert to string
+        return str(value)
+    
     def _initialize_session_state(self):
         """Initialize session state for enhanced features."""
         
@@ -902,7 +918,7 @@ class EnhancedFitnessUI:
         
         # Personalized insights based on user profile
         goal = getattr(user_profile, 'primary_goal', None)
-        goal_value = goal.value if goal and hasattr(goal, 'value') else 'general_fitness'
+        goal_value = self._safe_get_enum_value(goal)
         
         insights_col1, insights_col2 = st.columns(2)
         
@@ -1814,7 +1830,7 @@ class EnhancedFitnessUI:
                 }
             }
             
-            goal_key = user_profile.primary_goal.value
+            goal_key = self._safe_get_enum_value(user_profile.primary_goal)
             if goal_key in goal_insights:
                 st.markdown(f"**Tips for {goal_key.replace('_', ' ').title()}:**")
                 for tip in goal_insights[goal_key]['tips']:
@@ -1833,3 +1849,114 @@ class EnhancedFitnessUI:
         
         for milestone in milestones:
             st.markdown(f"• {milestone}")
+    
+    # Missing nutrition methods - adding stub implementations
+    def _render_daily_nutrition(self, user_profile: UserProfile):
+        """Render daily nutrition tracking."""
+        st.markdown("### 🎯 Daily Nutrition Goals")
+        st.info("Daily nutrition tracking feature is under development.")
+        
+        # Basic nutrition display
+        try:
+            weight = getattr(user_profile, 'weight', 70)
+            activity_level = self._safe_get_enum_value(getattr(user_profile, 'activity_level', 'moderately_active'))
+            
+            # Simple calorie estimation
+            bmr = 1800 if getattr(user_profile, 'gender', 'male') == 'male' else 1400
+            activity_multipliers = {
+                'sedentary': 1.2,
+                'lightly_active': 1.375,
+                'moderately_active': 1.55,
+                'very_active': 1.725,
+                'extremely_active': 1.9
+            }
+            
+            multiplier = activity_multipliers.get(activity_level, 1.55)
+            daily_calories = int(bmr * multiplier)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Daily Calories", f"{daily_calories}")
+            with col2:
+                st.metric("Protein (g)", f"{int(weight * 2.2)}")
+            with col3:
+                st.metric("Water (L)", "2.5-3.0")
+            
+        except Exception as e:
+            st.error(f"Error calculating nutrition goals: {e}")
+    
+    def _render_meal_planning(self, user_profile: UserProfile):
+        """Render meal planning interface."""
+        st.markdown("### 📅 Weekly Meal Planning")
+        st.info("Meal planning feature is under development.")
+        
+        # Simple meal suggestions
+        st.markdown("#### Quick Meal Ideas")
+        meals = {
+            "Breakfast": ["Oatmeal with fruits", "Greek yogurt with berries", "Scrambled eggs with toast"],
+            "Lunch": ["Grilled chicken salad", "Quinoa bowl", "Turkey sandwich"],
+            "Dinner": ["Salmon with vegetables", "Lean beef with rice", "Tofu stir-fry"],
+            "Snacks": ["Apple with almonds", "Protein shake", "Mixed nuts"]
+        }
+        
+        for meal_type, options in meals.items():
+            with st.expander(f"{meal_type} Ideas"):
+                for option in options:
+                    st.write(f"• {option}")
+    
+    def _render_recipe_browser(self, user_profile: UserProfile):
+        """Render recipe browser."""
+        st.markdown("### 🍳 Healthy Recipes")
+        st.info("Recipe browser feature is under development.")
+        
+        # Sample recipes
+        st.markdown("#### Featured Recipes")
+        recipes = [
+            {"name": "Protein-Packed Smoothie", "time": "5 min", "calories": "300"},
+            {"name": "Quinoa Power Bowl", "time": "15 min", "calories": "450"},
+            {"name": "Grilled Chicken & Veggies", "time": "25 min", "calories": "400"}
+        ]
+        
+        for recipe in recipes:
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                st.write(f"**{recipe['name']}**")
+            with col2:
+                st.write(f"⏱️ {recipe['time']}")
+            with col3:
+                st.write(f"🔥 {recipe['calories']} cal")
+    
+    def _render_meal_prep_planner(self, user_profile: UserProfile):
+        """Render meal prep planner."""
+        st.markdown("### 🛒 Meal Prep Planning")
+        st.info("Meal prep planning feature is under development.")
+        
+        st.markdown("#### Meal Prep Tips")
+        tips = [
+            "🥘 Prepare proteins in bulk (chicken, fish, beans)",
+            "🍚 Cook grains and starches in batches",
+            "🥗 Pre-cut vegetables for easy assembly",
+            "📦 Use portion-controlled containers",
+            "❄️ Freeze extra portions for later"
+        ]
+        
+        for tip in tips:
+            st.write(tip)
+    
+    def _render_nutrition_analytics(self, user_profile: UserProfile):
+        """Render nutrition analytics."""
+        st.markdown("### 📊 Nutrition Analytics")
+        st.info("Nutrition analytics feature is under development.")
+        
+        # Mock analytics
+        st.markdown("#### Weekly Nutrition Summary")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Avg Calories", "2,100", "+50")
+        with col2:
+            st.metric("Protein Goal", "85%", "+5%")
+        with col3:
+            st.metric("Water Intake", "2.8L", "+0.3L")
+        with col4:
+            st.metric("Meals Logged", "18/21", "+2")

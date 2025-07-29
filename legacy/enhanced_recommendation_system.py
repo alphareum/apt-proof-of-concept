@@ -78,6 +78,32 @@ class EnhancedRecommendationEngine:
         self.workout_templates = self._load_workout_templates()
         self.periodization_models = self._load_periodization_models()
     
+    def _safe_get_enum(self, value, enum_class):
+        """Safely convert value to enum, handling both string and enum inputs."""
+        if value is None:
+            return None
+        
+        # If it's already the correct enum type, return it
+        if isinstance(value, enum_class):
+            return value
+        
+        # If it's a string, try to find matching enum
+        if isinstance(value, str):
+            for enum_member in enum_class:
+                if enum_member.value == value:
+                    return enum_member
+            # If no match found, return the first enum as default
+            return list(enum_class)[0]
+        
+        # If it has a value attribute (mock enum), try to match that
+        if hasattr(value, 'value'):
+            for enum_member in enum_class:
+                if enum_member.value == value.value:
+                    return enum_member
+        
+        # Last resort: return first enum
+        return list(enum_class)[0]
+    
     def generate_complete_program(self, user_profile: UserProfile, 
                                 program_weeks: int = 12) -> WorkoutProgram:
         """Generate a complete periodized workout program."""
@@ -100,7 +126,7 @@ class EnhancedRecommendationEngine:
             
             # Create complete program
             program = WorkoutProgram(
-                program_name=f"{user_profile.primary_goal.value.title()} Program",
+                program_name=f"{self._safe_get_enum(user_profile.primary_goal, GoalType).value.title()} Program",
                 total_weeks=program_weeks,
                 phases=phases,
                 weekly_plans=weekly_plans,
@@ -162,14 +188,17 @@ class EnhancedRecommendationEngine:
             
         except Exception as e:
             logger.error(f"Error generating adaptive recommendations: {e}")
+            # Add traceback for better debugging
+            import traceback
+            logger.error(f"Detailed error: {traceback.format_exc()}")
             return {'error': f'Failed to generate recommendations: {str(e)}'}
     
     def _create_distinct_program_options(self, user_profile: UserProfile, 
                                        user_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Create 4 distinctly different program options based on user profile."""
         
-        base_goal = user_profile.primary_goal.value
-        fitness_level = user_profile.fitness_level.value
+        base_goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel).value
         available_time = getattr(user_profile, 'available_time', 60)
         
         options = []
@@ -237,7 +266,7 @@ class EnhancedRecommendationEngine:
                                         user_analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Create a specialized program based on user's specific goals and analysis."""
         
-        goal = user_profile.primary_goal.value
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
         
         if goal == 'strength':
             return {
@@ -417,8 +446,8 @@ class EnhancedRecommendationEngine:
         """Enhance program differentiation with user-specific adaptations."""
         
         # Add user-specific modifications to each option
-        fitness_level = user_profile.fitness_level.value
-        goal = user_profile.primary_goal.value
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel).value
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
         
         for i, option in enumerate(options):
             # Adjust complexity based on fitness level
@@ -571,8 +600,8 @@ class EnhancedRecommendationEngine:
                                          user_analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Create significantly different workout varieties based on user profile."""
         
-        goal = user_profile.primary_goal.value
-        fitness_level = user_profile.fitness_level.value
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel).value
         
         # Create truly different workout varieties
         varieties = {}
@@ -678,8 +707,8 @@ class EnhancedRecommendationEngine:
         """Get user-specific customizations for workout varieties."""
         
         customizations = []
-        fitness_level = user_profile.fitness_level.value
-        goal = user_profile.primary_goal.value
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel).value
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
         
         # Fitness level customizations
         if fitness_level == 'beginner':
@@ -1051,7 +1080,7 @@ class EnhancedRecommendationEngine:
                     'Keep chest up and core tight',
                     'Drive through heels'
                 ],
-                'progressions': self._get_exercise_progressions('squats', user_profile.fitness_level)
+                'progressions': self._get_exercise_progressions('squats', self._safe_get_enum(user_profile.fitness_level, FitnessLevel))
             },
             {
                 'name': 'Lunges',
@@ -1067,7 +1096,7 @@ class EnhancedRecommendationEngine:
                     'Keep front knee over ankle',
                     'Lower back knee toward ground'
                 ],
-                'progressions': self._get_exercise_progressions('lunges', user_profile.fitness_level)
+                'progressions': self._get_exercise_progressions('lunges', self._safe_get_enum(user_profile.fitness_level, FitnessLevel))
             },
             {
                 'name': 'Deadlifts',
@@ -1083,7 +1112,7 @@ class EnhancedRecommendationEngine:
                     'Hinge at hips',
                     'Drive through heels'
                 ],
-                'progressions': self._get_exercise_progressions('deadlifts', user_profile.fitness_level)
+                'progressions': self._get_exercise_progressions('deadlifts', self._safe_get_enum(user_profile.fitness_level, FitnessLevel))
             }
         ]
         
@@ -1171,8 +1200,11 @@ class EnhancedRecommendationEngine:
             FitnessLevel.ADVANCED: 4
         }
         
+        # Safely get the fitness level enum
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        
         phase_modifier = phase.volume_percentage / 100
-        calculated_sets = int(base_sets[user_profile.fitness_level] * phase_modifier)
+        calculated_sets = int(base_sets[fitness_level] * phase_modifier)
         calculated_sets = max(1, min(calculated_sets, 6))  # Ensure reasonable range
         
         return f"{calculated_sets}"
@@ -1207,15 +1239,8 @@ class EnhancedRecommendationEngine:
         else:
             rep_type = 'endurance'
         
-        # Convert fitness level to enum if it's a string/int
-        if isinstance(user_profile.fitness_level, str):
-            fitness_level = FitnessLevel(user_profile.fitness_level)
-        elif isinstance(user_profile.fitness_level, int):
-            # Map integer to fitness level (0=beginner, 1=intermediate, 2=advanced)
-            level_map = {0: FitnessLevel.BEGINNER, 1: FitnessLevel.INTERMEDIATE, 2: FitnessLevel.ADVANCED}
-            fitness_level = level_map.get(user_profile.fitness_level, FitnessLevel.BEGINNER)
-        else:
-            fitness_level = user_profile.fitness_level
+        # Use safe enum conversion
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
         
         min_reps, max_reps = rep_ranges[rep_type][fitness_level]
         
@@ -1443,7 +1468,9 @@ class EnhancedRecommendationEngine:
             FitnessLevel.ADVANCED: 8
         }
         
-        rounds = base_rounds[user_profile.fitness_level]
+        # Safely get the fitness level enum
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        rounds = base_rounds[fitness_level]
         
         # Adjust for phase intensity
         if phase.intensity_percentage > 85:
@@ -1695,15 +1722,15 @@ class EnhancedRecommendationEngine:
     def _assess_current_fitness(self, user_profile: UserProfile) -> Dict[str, Any]:
         """Assess current fitness level."""
         return {
-            'level': user_profile.fitness_level.value,
-            'activity_level': user_profile.activity_level.value,
+            'level': self._safe_get_enum(user_profile.fitness_level, FitnessLevel).value,
+            'activity_level': self._safe_get_enum(user_profile.activity_level, ActivityLevel).value,
             'estimated_capacity': 'moderate'  # Would be more sophisticated in real implementation
         }
     
     def _analyze_goals(self, user_profile: UserProfile) -> Dict[str, Any]:
         """Analyze user goals."""
         return {
-            'primary_goal': user_profile.primary_goal.value,
+            'primary_goal': self._safe_get_enum(user_profile.primary_goal, GoalType).value,
             'secondary_goals': [goal.value for goal in user_profile.secondary_goals],
             'goal_specificity': 'moderate'
         }
@@ -1738,10 +1765,11 @@ class EnhancedRecommendationEngine:
     def _assess_experience_level(self, user_profile: UserProfile, 
                                workout_history: List[Dict] = None) -> Dict[str, Any]:
         """Assess exercise experience level."""
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
         return {
-            'fitness_level': user_profile.fitness_level.value,
+            'fitness_level': fitness_level.value,
             'workout_history_length': len(workout_history) if workout_history else 0,
-            'experience_rating': 'novice' if user_profile.fitness_level == FitnessLevel.BEGINNER else 'experienced'
+            'experience_rating': 'novice' if fitness_level == FitnessLevel.BEGINNER else 'experienced'
         }
     
     def _identify_motivation_factors(self, user_profile: UserProfile) -> List[str]:
@@ -1806,6 +1834,30 @@ class EnhancedRecommendationEngine:
                                  preferences: Dict[str, Any]) -> Dict[str, Any]:
         """Apply adaptive algorithms to base recommendations."""
         
+        # Check if base_recommendations is actually a program structure (from the bug)
+        if 'name' in base_recommendations and 'sample_week' in base_recommendations:
+            # This is a program structure, not exercise recommendations
+            # Return it as-is with some basic adaptive modifications
+            adaptive_program = base_recommendations.copy()
+            
+            # Apply time constraints
+            if user_analysis['time_constraints']['time_efficiency_needed']:
+                if adaptive_program.get('duration_per_session', 60) > 45:
+                    adaptive_program['duration_per_session'] = 45
+                    adaptive_program['adaptation_note'] = 'Duration reduced for time efficiency'
+            
+            # Apply equipment constraints  
+            equipment_available = user_analysis['equipment_availability']['available_equipment']
+            if len(equipment_available) < 3:  # Minimal equipment
+                equipment_needed = adaptive_program.get('equipment_needed', [])
+                minimal_equipment = ['bodyweight', 'resistance_bands', 'dumbbells']
+                adaptive_program['equipment_needed'] = [eq for eq in equipment_needed if eq in minimal_equipment]
+                if not adaptive_program['equipment_needed']:
+                    adaptive_program['equipment_needed'] = ['bodyweight']
+            
+            return adaptive_program
+        
+        # Original logic for actual exercise recommendations
         # Start with base recommendations
         adaptive_recs = base_recommendations.copy()
         
@@ -1813,26 +1865,29 @@ class EnhancedRecommendationEngine:
         if user_analysis['time_constraints']['time_efficiency_needed']:
             # Prioritize compound movements and circuits
             for category in adaptive_recs:
-                # Filter to more time-efficient exercises
-                adaptive_recs[category] = adaptive_recs[category][:3]
+                if isinstance(adaptive_recs[category], list):
+                    # Filter to more time-efficient exercises
+                    adaptive_recs[category] = adaptive_recs[category][:3]
         
         # Apply equipment constraints
         equipment_available = user_analysis['equipment_availability']['available_equipment']
         for category in adaptive_recs:
-            adaptive_recs[category] = [
-                rec for rec in adaptive_recs[category]
-                if not rec['exercise'].equipment_needed or 
-                all(eq in equipment_available for eq in rec['exercise'].equipment_needed)
-            ]
+            if isinstance(adaptive_recs[category], list):
+                adaptive_recs[category] = [
+                    rec for rec in adaptive_recs[category]
+                    if not hasattr(rec, 'exercise') or not rec['exercise'].equipment_needed or 
+                    all(eq in equipment_available for eq in rec['exercise'].equipment_needed)
+                ]
         
         # Apply injury modifications
         if user_analysis['injury_considerations']['modifications_needed']:
             # Apply exercise modifications or substitutions
             for category in adaptive_recs:
-                for rec in adaptive_recs[category]:
-                    if rec['exercise'].contraindications:
-                        # Add modification notes
-                        rec['modification_applied'] = True
+                if isinstance(adaptive_recs[category], list):
+                    for rec in adaptive_recs[category]:
+                        if hasattr(rec, 'exercise') and rec['exercise'].contraindications:
+                            # Add modification notes
+                            rec['modification_applied'] = True
         
         return adaptive_recs
     
@@ -1966,7 +2021,7 @@ class EnhancedRecommendationEngine:
     def _analyze_goal_alignment(self, user_profile: UserProfile) -> str:
         """Analyze how the program aligns with user goals."""
         
-        primary_goal = user_profile.primary_goal.value
+        primary_goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
         secondary_goals = [goal.value for goal in user_profile.secondary_goals] if user_profile.secondary_goals else []
         
         alignment_description = f"Program specifically designed for {primary_goal.replace('_', ' ')}"
@@ -2146,3 +2201,813 @@ class EnhancedRecommendationEngine:
         })
         
         return exercise_progressions.get(fitness_level, [f'Standard {exercise_name}'])
+    
+    def _generate_detailed_adaptation_notes(self, user_analysis: Dict[str, Any]) -> List[str]:
+        """Generate detailed adaptation notes based on user analysis."""
+        
+        notes = []
+        
+        if user_analysis['time_constraints']['time_efficiency_needed']:
+            notes.append("Workouts optimized for time efficiency with compound movements")
+        
+        if user_analysis['injury_considerations']['modifications_needed']:
+            notes.append("Exercise modifications applied for injury considerations")
+        
+        if user_analysis['equipment_availability']['equipment_versatility'] < 3:
+            notes.append("Program adapted for minimal equipment setup")
+        
+        experience_level = user_analysis['fitness_level']['experience_rating']
+        if experience_level == 'novice':
+            notes.append("Focus on form and technique development for beginners")
+        elif experience_level == 'experienced':
+            notes.append("Advanced techniques and higher intensities included")
+        
+        return notes
+    
+    def _get_advanced_recovery_recommendations(self, user_profile: UserProfile) -> List[str]:
+        """Get advanced recovery recommendations."""
+        
+        recovery_recs = [
+            "Aim for 7-9 hours of quality sleep nightly",
+            "Stay hydrated with 2.5-3L water daily",
+            "Include 5-10 minutes of light stretching daily",
+            "Practice deep breathing or meditation for stress management"
+        ]
+        
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        if fitness_level == FitnessLevel.BEGINNER:
+            recovery_recs.extend([
+                "Allow 48-72 hours between intense workouts",
+                "Listen to your body and take extra rest days if needed"
+            ])
+        elif fitness_level == FitnessLevel.ADVANCED:
+            recovery_recs.extend([
+                "Consider massage or foam rolling 2-3x per week",
+                "Monitor heart rate variability for recovery status",
+                "Use contrast showers or ice baths for enhanced recovery"
+            ])
+        
+        activity_level = self._safe_get_enum(user_profile.activity_level, ActivityLevel)
+        if activity_level in [ActivityLevel.VERY_ACTIVE, ActivityLevel.EXTREMELY_ACTIVE]:
+            recovery_recs.append("Consider periodized deload weeks every 4-6 weeks")
+        
+        return recovery_recs
+    
+    def _get_detailed_nutrition_timing(self, user_profile: UserProfile) -> Dict[str, str]:
+        """Get detailed nutrition timing recommendations."""
+        
+        timing_recommendations = {
+            'pre_workout': 'Light snack 30-60 minutes before exercise (banana, oatmeal)',
+            'during_workout': 'Water for sessions <60 min, sports drink for longer sessions',
+            'post_workout': 'Protein + carbs within 30-60 minutes (protein shake + fruit)',
+            'daily_hydration': 'Start with 500ml upon waking, sip throughout day',
+            'meal_frequency': 'Eat every 3-4 hours to maintain energy levels',
+            'evening_nutrition': 'Light protein snack 1-2 hours before bed if hungry'
+        }
+        
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType)
+        
+        if goal == GoalType.WEIGHT_LOSS:
+            timing_recommendations.update({
+                'pre_workout': 'Train fasted or with minimal pre-workout nutrition',
+                'post_workout': 'Prioritize protein over carbs (protein shake + vegetables)',
+                'meal_timing': 'Consider intermittent fasting with 8-hour eating window'
+            })
+        elif goal == GoalType.MUSCLE_GAIN:
+            timing_recommendations.update({
+                'pre_workout': 'Ensure adequate carbs 1-2 hours before training',
+                'post_workout': 'High protein + carbs immediately post-workout',
+                'bedtime': 'Casein protein or Greek yogurt before bed'
+            })
+        elif goal == GoalType.ENDURANCE:
+            timing_recommendations.update({
+                'pre_workout': 'Carb-rich meal 2-3 hours before long sessions',
+                'during_workout': 'Carb drinks for sessions >90 minutes',
+                'post_workout': 'Emphasize carb replenishment with protein'
+            })
+        
+        return timing_recommendations
+    
+    def _create_comprehensive_progression_plan(self, user_profile: UserProfile, 
+                                             adaptive_recommendations: Dict[str, Any],
+                                             user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a comprehensive progression plan based on user profile and recommendations."""
+        
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType)
+        
+        # Create progressive phases based on fitness level
+        if fitness_level == FitnessLevel.BEGINNER:
+            phases = [
+                {
+                    'phase_name': 'Foundation Phase',
+                    'duration_weeks': 4,
+                    'focus': 'Form mastery and base conditioning',
+                    'progression_strategy': 'Volume increase with form focus'
+                },
+                {
+                    'phase_name': 'Development Phase', 
+                    'duration_weeks': 6,
+                    'focus': 'Strength building and technique refinement',
+                    'progression_strategy': 'Moderate intensity increase'
+                },
+                {
+                    'phase_name': 'Advancement Phase',
+                    'duration_weeks': 6,
+                    'focus': 'Performance optimization',
+                    'progression_strategy': 'Periodized intensity and volume'
+                }
+            ]
+        elif fitness_level == FitnessLevel.INTERMEDIATE:
+            phases = [
+                {
+                    'phase_name': 'Strength Phase',
+                    'duration_weeks': 6,
+                    'focus': 'Power and strength development',
+                    'progression_strategy': 'Progressive overload emphasis'
+                },
+                {
+                    'phase_name': 'Hypertrophy Phase',
+                    'duration_weeks': 6,
+                    'focus': 'Muscle building and volume',
+                    'progression_strategy': 'Volume progression'
+                },
+                {
+                    'phase_name': 'Peaking Phase',
+                    'duration_weeks': 4,
+                    'focus': 'Peak performance and testing',
+                    'progression_strategy': 'Intensity maximization'
+                }
+            ]
+        else:  # Advanced
+            phases = [
+                {
+                    'phase_name': 'Accumulation Phase',
+                    'duration_weeks': 4,
+                    'focus': 'High volume base building',
+                    'progression_strategy': 'Volume accumulation'
+                },
+                {
+                    'phase_name': 'Intensification Phase', 
+                    'duration_weeks': 4,
+                    'focus': 'High intensity work',
+                    'progression_strategy': 'Intensity focus with reduced volume'
+                },
+                {
+                    'phase_name': 'Realization Phase',
+                    'duration_weeks': 2,
+                    'focus': 'Peak performance',
+                    'progression_strategy': 'Competition preparation'
+                },
+                {
+                    'phase_name': 'Recovery Phase',
+                    'duration_weeks': 2,
+                    'focus': 'Active recovery and adaptation',
+                    'progression_strategy': 'Deload and regeneration'
+                }
+            ]
+        
+        # Add goal-specific adjustments
+        if goal == GoalType.WEIGHT_LOSS:
+            for phase in phases:
+                phase['cardio_emphasis'] = 'High'
+                phase['nutrition_focus'] = 'Caloric deficit maintenance'
+        elif goal == GoalType.MUSCLE_GAIN:
+            for phase in phases:
+                phase['resistance_emphasis'] = 'High'
+                phase['nutrition_focus'] = 'Protein and caloric surplus'
+        
+        progression_plan = {
+            'total_duration_weeks': sum(phase['duration_weeks'] for phase in phases),
+            'phases': phases,
+            'assessment_schedule': [
+                'Baseline assessment - Week 0',
+                'Progress check - Week 4', 
+                'Mid-program assessment - Week 8',
+                'Final assessment - Week 16'
+            ],
+            'progression_markers': [
+                'Strength improvements (weight/reps)',
+                'Endurance improvements (duration/heart rate)',
+                'Body composition changes',
+                'Movement quality improvements',
+                'Subjective wellness measures'
+            ],
+            'adjustment_triggers': [
+                'Plateau in performance for 2+ weeks',
+                'Persistent fatigue or overreaching',
+                'Injury or pain development',
+                'Major life changes affecting training'
+            ]
+        }
+        
+        return progression_plan
+    
+    def _create_detailed_workout_varieties(self, adaptive_recommendations: Dict[str, Any],
+                                         user_profile: UserProfile, 
+                                         user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Create detailed workout varieties with significant differences."""
+        
+        base_workouts = adaptive_recommendations.get('daily_workouts', {})
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType)
+        
+        workout_varieties = {}
+        
+        # Create 3 different approaches for each workout day
+        for day, workout in base_workouts.items():
+            varieties = {
+                'strength_focused': {
+                    'name': f'{day} - Strength Focus',
+                    'description': 'Emphasis on heavy compound movements',
+                    'rep_ranges': '3-6 reps',
+                    'rest_periods': '3-5 minutes',
+                    'training_density': 'Low (quality over quantity)',
+                    'exercise_selection': 'Compound movements, barbell emphasis'
+                },
+                'endurance_focused': {
+                    'name': f'{day} - Endurance Focus', 
+                    'description': 'Higher volume with moderate intensity',
+                    'rep_ranges': '12-20 reps',
+                    'rest_periods': '45-90 seconds',
+                    'training_density': 'High (circuit-style)',
+                    'exercise_selection': 'Bodyweight, light weights, cardio intervals'
+                },
+                'power_focused': {
+                    'name': f'{day} - Power Focus',
+                    'description': 'Explosive movements and athletic performance',
+                    'rep_ranges': '6-10 reps (explosive)',
+                    'rest_periods': '2-3 minutes',
+                    'training_density': 'Moderate (quality movement)',
+                    'exercise_selection': 'Plyometrics, Olympic lifts, speed work'
+                }
+            }
+            
+            # Adjust based on goal
+            if goal == GoalType.WEIGHT_LOSS:
+                varieties['metabolic_focused'] = {
+                    'name': f'{day} - Metabolic Focus',
+                    'description': 'Maximum calorie burn and conditioning',
+                    'rep_ranges': '15-25 reps',
+                    'rest_periods': '30-60 seconds',
+                    'training_density': 'Very High (minimal rest)',
+                    'exercise_selection': 'Compound movements, supersets, circuits'
+                }
+            elif goal == GoalType.MUSCLE_GAIN:
+                varieties['hypertrophy_focused'] = {
+                    'name': f'{day} - Hypertrophy Focus',
+                    'description': 'Maximum muscle building stimulus',
+                    'rep_ranges': '8-12 reps',
+                    'rest_periods': '90-120 seconds',
+                    'training_density': 'Moderate (controlled tempo)',
+                    'exercise_selection': 'Isolation emphasis, machines, dumbbells'
+                }
+            
+            workout_varieties[day] = varieties
+        
+        return workout_varieties
+    
+    def _compare_program_options(self, program_options: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Compare program options to help user make informed choice."""
+        
+        if not program_options or len(program_options) < 2:
+            return {}
+        
+        comparison = {
+            'time_commitment': {},
+            'equipment_requirements': {},
+            'intensity_levels': {},
+            'best_for_goals': {},
+            'experience_requirements': {}
+        }
+        
+        for i, option in enumerate(program_options):
+            name = option.get('name', f'Option {i+1}')
+            
+            # Time commitment comparison
+            duration = option.get('duration_per_session', 45)
+            frequency = option.get('sessions_per_week', 3)
+            weekly_time = duration * frequency
+            
+            comparison['time_commitment'][name] = {
+                'session_duration': f"{duration} minutes",
+                'weekly_frequency': f"{frequency} sessions",
+                'total_weekly_time': f"{weekly_time} minutes"
+            }
+            
+            # Equipment requirements
+            equipment = option.get('equipment_needed', [])
+            comparison['equipment_requirements'][name] = {
+                'equipment_list': equipment,
+                'complexity': 'High' if len(equipment) > 4 else 'Medium' if len(equipment) > 2 else 'Low'
+            }
+            
+            # Intensity assessment
+            intensity_style = option.get('intensity_style', 'moderate')
+            comparison['intensity_levels'][name] = {
+                'style': intensity_style,
+                'difficulty': 'High' if 'high' in intensity_style else 'Medium' if 'moderate' in intensity_style else 'Low'
+            }
+            
+            # Best for analysis
+            best_for = option.get('best_for', [])
+            comparison['best_for_goals'][name] = best_for
+            
+            # Experience requirements
+            pros = option.get('pros', [])
+            cons = option.get('cons', [])
+            
+            if any('beginner' in pro.lower() or 'basic' in pro.lower() for pro in pros):
+                experience_req = 'Beginner friendly'
+            elif any('advanced' in con.lower() or 'experience' in con.lower() for con in cons):
+                experience_req = 'Advanced required'
+            else:
+                experience_req = 'Intermediate suitable'
+                
+            comparison['experience_requirements'][name] = experience_req
+        
+        # Add recommendation based on comparison
+        comparison['recommendations'] = {
+            'most_time_efficient': min(comparison['time_commitment'].items(), 
+                                     key=lambda x: int(x[1]['total_weekly_time'].split()[0]))[0],
+            'minimal_equipment': min(comparison['equipment_requirements'].items(),
+                                   key=lambda x: len(x[1]['equipment_list']))[0],
+            'beginner_friendly': next((name for name, req in comparison['experience_requirements'].items() 
+                                     if 'Beginner' in req), 'No specific beginner option'),
+        }
+        
+        return comparison
+    
+    def _enhance_program_differentiation(self, options: List[Dict[str, Any]], 
+                                       user_profile: UserProfile,
+                                       user_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Enhance program differentiation based on user analysis."""
+        
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType)
+        
+        # Add user-specific customizations to each option
+        for option in options:
+            # Adjust based on fitness level
+            if fitness_level == FitnessLevel.BEGINNER:
+                option['beginner_modifications'] = [
+                    'Extended warm-up and cool-down periods',
+                    'Focus on form over weight/intensity',
+                    'Additional rest days for recovery',
+                    'Simplified exercise variations'
+                ]
+                # Reduce intensity for beginners
+                if option.get('sessions_per_week', 0) > 4:
+                    option['sessions_per_week'] = 4
+                    option['beginner_note'] = 'Reduced frequency for beginners'
+                    
+            elif fitness_level == FitnessLevel.ADVANCED:
+                option['advanced_techniques'] = [
+                    'Advanced periodization methods',
+                    'Complex movement patterns',
+                    'Higher training frequencies',
+                    'Performance tracking and analysis'
+                ]
+            
+            # Goal-specific enhancements
+            if goal == GoalType.WEIGHT_LOSS:
+                option['weight_loss_features'] = [
+                    'High calorie burn emphasis',
+                    'Metabolic conditioning focus',
+                    'Nutrition timing guidance',
+                    'Progress tracking by body composition'
+                ]
+                # Increase frequency for weight loss
+                if option.get('sessions_per_week', 0) < 5:
+                    option['weight_loss_frequency_boost'] = 'Additional cardio sessions recommended'
+                    
+            elif goal == GoalType.MUSCLE_GAIN:
+                option['muscle_gain_features'] = [
+                    'Progressive overload emphasis',
+                    'Compound movement focus',
+                    'Recovery optimization',
+                    'Strength progression tracking'
+                ]
+            
+            # Time constraint adjustments
+            time_constraints = user_analysis.get('time_constraints', {})
+            if time_constraints.get('time_efficiency_needed', False):
+                option['time_efficient_modifications'] = [
+                    'Supersetting for time efficiency',
+                    'Compound exercises prioritized',
+                    'Minimal equipment transitions',
+                    'Pre-planned workout sequences'
+                ]
+                # Cap session duration for time-constrained users
+                if option.get('duration_per_session', 0) > 45:
+                    option['time_efficient_duration'] = 45
+                    option['time_note'] = 'Duration optimized for busy schedules'
+            
+            # Equipment availability adjustments
+            equipment_availability = user_analysis.get('equipment_availability', {})
+            equipment_versatility = equipment_availability.get('equipment_versatility', 3)
+            
+            if equipment_versatility < 3:  # Limited equipment
+                option['minimal_equipment_adaptations'] = [
+                    'Bodyweight exercise alternatives',
+                    'Resistance band substitutions',
+                    'Household item alternatives',
+                    'Progressive bodyweight difficulty'
+                ]
+                # Update equipment needs for minimal equipment users
+                current_equipment = option.get('equipment_needed', [])
+                minimal_equipment = ['resistance_bands', 'yoga_mat', 'bodyweight_only']
+                option['adapted_equipment'] = [eq for eq in current_equipment if eq in minimal_equipment]
+            
+            # Injury considerations
+            injury_considerations = user_analysis.get('injury_considerations', {})
+            if injury_considerations.get('modifications_needed', False):
+                option['injury_modifications'] = [
+                    'Low-impact exercise alternatives',
+                    'Modified range of motion',
+                    'Additional mobility work',
+                    'Pain monitoring protocols'
+                ]
+                # Add safety notes
+                option['safety_emphasis'] = 'Extra attention to form and pain-free movement'
+            
+            # Add personalization score based on user match
+            personalization_score = self._calculate_personalization_score(option, user_profile, user_analysis)
+            option['personalization_score'] = personalization_score
+            option['user_match_percentage'] = int(personalization_score * 100)
+        
+        # Sort by personalization score (highest first)
+        options.sort(key=lambda x: x.get('personalization_score', 0), reverse=True)
+        
+        return options
+    
+    def _calculate_personalization_score(self, option: Dict[str, Any], 
+                                       user_profile: UserProfile,
+                                       user_analysis: Dict[str, Any]) -> float:
+        """Calculate how well an option matches the user's profile."""
+        
+        score = 0.0
+        max_score = 0.0
+        
+        # Time constraint matching (20% of score)
+        max_score += 20
+        user_available_time = getattr(user_profile, 'available_time', 60)
+        option_duration = option.get('duration_per_session', 45)
+        
+        if option_duration <= user_available_time:
+            time_efficiency = (user_available_time - option_duration) / user_available_time
+            score += 20 * (1 - time_efficiency * 0.5)  # Prefer efficient use of time
+        else:
+            score += 5  # Penalty for exceeding available time
+        
+        # Equipment matching (15% of score)
+        max_score += 15
+        option_equipment = set(option.get('equipment_needed', []))
+        user_equipment_level = user_analysis.get('equipment_availability', {}).get('equipment_versatility', 3)
+        
+        if user_equipment_level >= 4:  # Full gym access
+            score += 15
+        elif user_equipment_level >= 3 and len(option_equipment) <= 3:  # Home gym
+            score += 12
+        elif user_equipment_level <= 2 and 'bodyweight_only' in option_equipment:  # Minimal
+            score += 15
+        else:
+            score += 5
+        
+        # Fitness level matching (25% of score)
+        max_score += 25
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        option_intensity = option.get('intensity_style', 'moderate')
+        
+        if fitness_level == FitnessLevel.BEGINNER:
+            if 'beginner' in option_intensity or 'bodyweight' in option_intensity:
+                score += 25
+            elif 'moderate' in option_intensity:
+                score += 15
+            else:
+                score += 5
+        elif fitness_level == FitnessLevel.INTERMEDIATE:
+            if 'moderate' in option_intensity or 'balanced' in option_intensity:
+                score += 25
+            else:
+                score += 15
+        else:  # Advanced
+            if 'advanced' in option_intensity or 'high' in option_intensity:
+                score += 25
+            else:
+                score += 10
+        
+        # Goal alignment (25% of score)
+        max_score += 25
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType).value
+        option_focus = option.get('focus_areas', [])
+        
+        goal_keywords = {
+            'weight_loss': ['fat_loss', 'metabolic', 'cardio', 'conditioning'],
+            'muscle_gain': ['muscle_growth', 'hypertrophy', 'strength', 'building'],
+            'strength': ['strength', 'power', 'powerlifts', 'max_strength'],
+            'endurance': ['endurance', 'cardio', 'conditioning', 'athletic'],
+            'general_fitness': ['balanced', 'functional', 'general', 'comprehensive']
+        }
+        
+        relevant_keywords = goal_keywords.get(goal, [])
+        focus_match = any(keyword in ' '.join(option_focus).lower() for keyword in relevant_keywords)
+        
+        if focus_match:
+            score += 25
+        else:
+            score += 10
+        
+        # Experience and injury considerations (15% of score)
+        max_score += 15
+        
+        injury_considerations = user_analysis.get('injury_considerations', {})
+        if injury_considerations.get('modifications_needed', False):
+            if 'bodyweight' in option.get('intensity_style', '') or 'low' in option.get('intensity_style', ''):
+                score += 15
+            else:
+                score += 8
+        else:
+            score += 15
+        
+        # Normalize score to 0-1 range
+        return min(score / max_score, 1.0) if max_score > 0 else 0.5
+    
+    def _analyze_user_comprehensively(self, user_profile: UserProfile, 
+                                    workout_history: List[Dict] = None) -> Dict[str, Any]:
+        """Analyze user profile and history comprehensively."""
+        
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType)
+        activity_level = self._safe_get_enum(user_profile.activity_level, ActivityLevel)
+        
+        # Basic profile analysis
+        analysis = {
+            'fitness_level': {
+                'level': fitness_level.value,
+                'experience_rating': 'novice' if fitness_level == FitnessLevel.BEGINNER else 
+                                   'experienced' if fitness_level == FitnessLevel.ADVANCED else 'intermediate'
+            },
+            'experience_level': {
+                'experience_rating': 'novice' if fitness_level == FitnessLevel.BEGINNER else 
+                                   'experienced' if fitness_level == FitnessLevel.ADVANCED else 'intermediate'
+            },
+            'goal_analysis': {
+                'primary_goal': goal.value,
+                'goal_category': self._categorize_goal(goal),
+                'priority_areas': self._get_goal_priority_areas(goal)
+            },
+            'time_constraints': {
+                'available_time': getattr(user_profile, 'available_time', 60),
+                'workout_days_per_week': getattr(user_profile, 'workout_days_per_week', 3),
+                'time_efficiency_needed': getattr(user_profile, 'available_time', 60) < 45
+            },
+            'equipment_availability': {
+                'available_equipment': getattr(user_profile, 'available_equipment', []),
+                'equipment_versatility': len(getattr(user_profile, 'available_equipment', [])),
+                'equipment_level': self._assess_equipment_level(user_profile)
+            },
+            'injury_considerations': {
+                'has_injuries': bool(getattr(user_profile, 'injuries', [])),
+                'injury_list': getattr(user_profile, 'injuries', []),
+                'modifications_needed': bool(getattr(user_profile, 'injuries', []))
+            },
+            'activity_background': {
+                'activity_level': activity_level.value,
+                'estimated_weekly_activity': self._estimate_weekly_activity(activity_level),
+                'conditioning_base': 'good' if activity_level.value in ['very_active', 'extremely_active'] else 'moderate'
+            }
+        }
+        
+        # Add workout history analysis if available
+        if workout_history:
+            analysis['workout_history'] = self._analyze_workout_history(workout_history)
+        else:
+            analysis['workout_history'] = {
+                'has_history': False,
+                'estimated_preferences': self._estimate_workout_preferences(user_profile)
+            }
+        
+        return analysis
+    
+    def _categorize_goal(self, goal: GoalType) -> str:
+        """Categorize the goal into broader categories."""
+        goal_categories = {
+            GoalType.WEIGHT_LOSS: 'body_composition',
+            GoalType.MUSCLE_GAIN: 'body_composition', 
+            GoalType.STRENGTH: 'performance',
+            GoalType.ENDURANCE: 'performance',
+            GoalType.FLEXIBILITY: 'wellness',
+            GoalType.GENERAL_FITNESS: 'general'
+        }
+        return goal_categories.get(goal, 'general')
+    
+    def _get_goal_priority_areas(self, goal: GoalType) -> List[str]:
+        """Get priority areas for the specific goal."""
+        priority_map = {
+            GoalType.WEIGHT_LOSS: ['cardiovascular_health', 'metabolic_conditioning', 'body_composition'],
+            GoalType.MUSCLE_GAIN: ['progressive_overload', 'protein_synthesis', 'recovery'],
+            GoalType.STRENGTH: ['neural_adaptation', 'motor_patterns', 'progressive_loading'],
+            GoalType.ENDURANCE: ['aerobic_capacity', 'cardiovascular_efficiency', 'work_capacity'],
+            GoalType.FLEXIBILITY: ['mobility', 'range_of_motion', 'injury_prevention'],
+            GoalType.GENERAL_FITNESS: ['balanced_development', 'functional_movement', 'overall_health']
+        }
+        return priority_map.get(goal, ['general_fitness'])
+    
+    def _assess_equipment_level(self, user_profile: UserProfile) -> str:
+        """Assess the user's equipment availability level."""
+        equipment = getattr(user_profile, 'available_equipment', [])
+        equipment_count = len(equipment)
+        
+        if equipment_count == 0:
+            return 'bodyweight_only'
+        elif equipment_count <= 2:
+            return 'minimal'
+        elif equipment_count <= 5:
+            return 'home_gym'
+        else:
+            return 'full_gym'
+    
+    def _estimate_weekly_activity(self, activity_level: ActivityLevel) -> str:
+        """Estimate weekly activity based on activity level."""
+        activity_map = {
+            ActivityLevel.SEDENTARY: '0-2 hours light activity',
+            ActivityLevel.LIGHTLY_ACTIVE: '2-4 hours light activity',
+            ActivityLevel.MODERATELY_ACTIVE: '4-6 hours moderate activity',
+            ActivityLevel.VERY_ACTIVE: '6-8 hours vigorous activity',
+            ActivityLevel.EXTREMELY_ACTIVE: '8+ hours intense activity'
+        }
+        return activity_map.get(activity_level, '3-5 hours moderate activity')
+    
+    def _analyze_workout_history(self, workout_history: List[Dict]) -> Dict[str, Any]:
+        """Analyze workout history for patterns and preferences."""
+        if not workout_history:
+            return {'has_history': False}
+        
+        # Basic history stats
+        total_workouts = len(workout_history)
+        
+        # Exercise preferences (simplified analysis)
+        exercise_types = {}
+        durations = []
+        
+        for workout in workout_history:
+            workout_type = workout.get('type', 'general')
+            exercise_types[workout_type] = exercise_types.get(workout_type, 0) + 1
+            
+            duration = workout.get('duration', 30)
+            durations.append(duration)
+        
+        avg_duration = sum(durations) / len(durations) if durations else 30
+        preferred_type = max(exercise_types.items(), key=lambda x: x[1])[0] if exercise_types else 'general'
+        
+        return {
+            'has_history': True,
+            'total_workouts': total_workouts,
+            'average_duration': avg_duration,
+            'preferred_workout_type': preferred_type,
+            'consistency_rating': 'high' if total_workouts > 20 else 'moderate' if total_workouts > 5 else 'low'
+        }
+    
+    def _estimate_workout_preferences(self, user_profile: UserProfile) -> Dict[str, Any]:
+        """Estimate workout preferences based on profile."""
+        goal = self._safe_get_enum(user_profile.primary_goal, GoalType)
+        fitness_level = self._safe_get_enum(user_profile.fitness_level, FitnessLevel)
+        
+        preferences = {
+            'estimated_duration_preference': getattr(user_profile, 'available_time', 45),
+            'estimated_frequency_preference': getattr(user_profile, 'workout_days_per_week', 3),
+            'estimated_intensity_preference': 'moderate'
+        }
+        
+        # Adjust based on goal
+        if goal == GoalType.WEIGHT_LOSS:
+            preferences['estimated_intensity_preference'] = 'high'
+            preferences['cardio_preference'] = 'high'
+        elif goal == GoalType.STRENGTH:
+            preferences['strength_preference'] = 'high'
+            preferences['cardio_preference'] = 'low'
+        
+        # Adjust based on fitness level
+        if fitness_level == FitnessLevel.BEGINNER:
+            preferences['estimated_intensity_preference'] = 'low_to_moderate'
+        elif fitness_level == FitnessLevel.ADVANCED:
+            preferences['estimated_intensity_preference'] = 'high'
+        
+        return preferences
+    
+    def _apply_adaptive_algorithms(self, selected_program: Dict[str, Any],
+                                 user_analysis: Dict[str, Any], 
+                                 preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply adaptive algorithms to customize the selected program."""
+        
+        # Start with the selected program
+        adaptive_program = selected_program.copy()
+        
+        # Apply time constraint adaptations
+        time_constraints = user_analysis.get('time_constraints', {})
+        available_time = time_constraints.get('available_time', 60)
+        
+        if available_time < adaptive_program.get('duration_per_session', 45):
+            adaptive_program['adapted_duration'] = available_time
+            adaptive_program['time_adaptation_notes'] = [
+                'Reduced session duration to fit available time',
+                'Focus on compound exercises for efficiency',
+                'Consider supersetting to maintain volume'
+            ]
+        
+        # Apply equipment adaptations
+        equipment_level = user_analysis.get('equipment_availability', {}).get('equipment_level', 'minimal')
+        
+        if equipment_level == 'bodyweight_only':
+            adaptive_program['equipment_adaptations'] = [
+                'All exercises adapted to bodyweight variants',
+                'Progressive difficulty through movement modifications',
+                'Resistance bands recommended as upgrade'
+            ]
+        elif equipment_level == 'minimal':
+            adaptive_program['equipment_adaptations'] = [
+                'Resistance bands and dumbbells prioritized',
+                'Bodyweight exercises as backup options',
+                'Creative use of household items'
+            ]
+        
+        # Apply injury accommodations
+        injury_considerations = user_analysis.get('injury_considerations', {})
+        if injury_considerations.get('modifications_needed', False):
+            injuries = injury_considerations.get('injury_list', [])
+            adaptive_program['injury_accommodations'] = [
+                f'Modified exercises to accommodate {", ".join(injuries)}',
+                'Emphasis on pain-free movement',
+                'Alternative exercises for affected areas',
+                'Regular check-ins on pain levels'
+            ]
+        
+        # Apply preference-based adaptations
+        if preferences:
+            intensity_pref = preferences.get('intensity_preference', 'moderate')
+            if intensity_pref == 'low':
+                adaptive_program['intensity_adaptations'] = [
+                    'Reduced intensity for comfort preference',
+                    'Longer warm-up and cool-down periods',
+                    'Focus on movement quality over quantity'
+                ]
+            elif intensity_pref == 'high':
+                adaptive_program['intensity_adaptations'] = [
+                    'Increased intensity for challenge preference',
+                    'Advanced exercise variations',
+                    'Shorter rest periods for conditioning'
+                ]
+        
+        # Generate adaptive weekly schedule
+        workout_days = time_constraints.get('workout_days_per_week', 3)
+        adaptive_program['weekly_schedule'] = self._generate_adaptive_weekly_schedule(
+            workout_days, adaptive_program, user_analysis
+        )
+        
+        return adaptive_program
+    
+    def _generate_adaptive_weekly_schedule(self, workout_days: int, 
+                                         program: Dict[str, Any],
+                                         user_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate an adaptive weekly schedule based on available days."""
+        
+        goal_category = user_analysis.get('goal_analysis', {}).get('goal_category', 'general')
+        
+        # Base schedule templates
+        if workout_days == 3:
+            schedule = {
+                'monday': {'type': 'full_body', 'focus': 'strength_and_cardio'},
+                'wednesday': {'type': 'full_body', 'focus': 'strength_focus'},
+                'friday': {'type': 'full_body', 'focus': 'endurance_and_flexibility'}
+            }
+        elif workout_days == 4:
+            schedule = {
+                'monday': {'type': 'upper_body', 'focus': 'strength'},
+                'tuesday': {'type': 'lower_body', 'focus': 'strength'},
+                'thursday': {'type': 'upper_body', 'focus': 'endurance'},
+                'saturday': {'type': 'full_body', 'focus': 'conditioning'}
+            }
+        elif workout_days >= 5:
+            schedule = {
+                'monday': {'type': 'push', 'focus': 'strength'},
+                'tuesday': {'type': 'pull', 'focus': 'strength'},
+                'wednesday': {'type': 'legs', 'focus': 'strength'},
+                'thursday': {'type': 'push', 'focus': 'hypertrophy'},
+                'friday': {'type': 'pull', 'focus': 'hypertrophy'},
+                'saturday': {'type': 'conditioning', 'focus': 'cardio'}
+            }
+        else:  # 1-2 days
+            schedule = {
+                'wednesday': {'type': 'full_body', 'focus': 'comprehensive'},
+                'saturday': {'type': 'full_body', 'focus': 'comprehensive'}
+            }
+        
+        # Adapt based on goal category
+        if goal_category == 'body_composition':
+            for day in schedule:
+                schedule[day]['cardio_component'] = 'included'
+        elif goal_category == 'performance':
+            for day in schedule:
+                schedule[day]['skill_component'] = 'included'
+        
+        return schedule

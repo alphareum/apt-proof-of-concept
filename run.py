@@ -143,8 +143,8 @@ def run_app(venv_path: Path, port: int = 8501, host: str = "localhost"):
     """Run the Streamlit application."""
     python_exe = get_python_executable(venv_path)
     
-    if not Path("app.py").exists():
-        print("❌ app.py not found!")
+    if not Path("main.py").exists():
+        print("❌ main.py not found!")
         return False
     
     print(f"🚀 Starting APT Fitness Assistant on http://{host}:{port}")
@@ -163,7 +163,7 @@ def run_app(venv_path: Path, port: int = 8501, host: str = "localhost"):
             env["PATH"] = f"{bin_path}{os.pathsep}{env['PATH']}"
         
         subprocess.check_call([
-            str(python_exe), "-m", "streamlit", "run", "app.py",
+            str(python_exe), "-m", "streamlit", "run", "main.py",
             "--server.port", str(port),
             "--server.address", host
         ], env=env)
@@ -233,7 +233,7 @@ def main():
         if not args.run:
             print("\n🚀 To run the application:")
             print(f"   python {__file__} --run")
-            print(f"   or: {get_python_executable(venv_path)} -m streamlit run app.py")
+            print(f"   or: {get_python_executable(venv_path)} -m streamlit run main.py")
     
     # Run the application
     if args.run:
