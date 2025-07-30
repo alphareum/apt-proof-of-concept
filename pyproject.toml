@@ -55,6 +55,10 @@ dependencies = [
     "imageio>=2.31.0",
     "scikit-image>=0.21.0",
     
+    # Enhanced image processing for CV
+    "image-quality>=1.2.7",
+    "pywavelets>=1.4.1",
+    
     # Web API
     "flask>=2.3.0",
     "flask-sqlalchemy>=3.0.0",

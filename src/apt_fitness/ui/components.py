@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
+from PIL import Image
 
 from ..core.models import UserProfile, GoalType, FitnessLevel, ActivityLevel, Gender, EquipmentType
 from ..engines.recommendation import get_recommendation_engine
@@ -325,7 +326,12 @@ class UIComponents:
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
-                    st.image(uploaded_file_enhanced, caption="Uploaded Image", use_column_width=True)
+                    try:
+                        # Convert uploaded file to PIL Image to avoid filename issues
+                        image = Image.open(uploaded_file_enhanced)
+                        st.image(image, caption="Uploaded Image", use_column_width=True)
+                    except Exception as e:
+                        st.error(f"❌ Could not display image: {e}")
                 
                 with col2:
                     st.success("✅ **Enhanced Analysis Ready**")
@@ -394,7 +400,12 @@ class UIComponents:
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
-                    st.image(uploaded_file_basic, caption="Uploaded Image", use_column_width=True)
+                    try:
+                        # Convert uploaded file to PIL Image to avoid filename issues
+                        image = Image.open(uploaded_file_basic)
+                        st.image(image, caption="Uploaded Image", use_column_width=True)
+                    except Exception as e:
+                        st.error(f"❌ Could not display image: {e}")
                 
                 with col2:
                     st.info("**Basic Analysis Includes:**\n"

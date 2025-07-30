@@ -30,6 +30,10 @@ opencv-contrib-python>=4.8.0
 imageio>=2.31.0
 scikit-image>=0.21.0
 
+# Enhanced image processing for CV
+image-quality>=1.2.7
+pywavelets>=1.4.1
+
 # Database and persistence
 # sqlite3 is included in Python standard library
 
