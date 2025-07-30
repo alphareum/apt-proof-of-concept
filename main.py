@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 import importlib.util
 
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ try:
     # Try new structure first
     from src.apt_fitness.core.models import UserProfile, Gender, ActivityLevel, FitnessLevel, GoalType
     from src.apt_fitness.core.config import AppConfig
+    from apt_fitness.analyzers.body_composition import get_body_analyzer
     MODELS_AVAILABLE = True
 except ImportError:
     try:
@@ -135,8 +137,9 @@ except ImportError:
     ENHANCED_PLANNER_AVAILABLE = False
 
 # Try to import body composition analysis
+# In main.py, change to:
 try:
-    from body_composition_analyzer import get_body_analyzer
+    from apt_fitness.analyzers.body_composition import get_body_analyzer
     BODY_COMP_AVAILABLE = True
 except ImportError:
     BODY_COMP_AVAILABLE = False
