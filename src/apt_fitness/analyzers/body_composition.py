@@ -33,6 +33,17 @@ from ..data.database import get_database
 logger = logging.getLogger(__name__)
 
 
+def _safe_visibility(landmark) -> float:
+    """Safely extract visibility value from landmark, handling string conversions."""
+    try:
+        visibility = landmark.visibility
+        if isinstance(visibility, str):
+            return float(visibility)
+        return float(visibility)
+    except (ValueError, TypeError, AttributeError):
+        return 0.5  # Default visibility if conversion fails
+
+
 class BodyCompositionAnalyzer:
     """Analyze body composition from images using computer vision."""
     
@@ -142,9 +153,29 @@ class BodyCompositionAnalyzer:
             'non_local_means': lambda img: cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
         }
     
+    def _normalize_gender(self, gender) -> str:
+        """Convert gender (string or Gender enum) to lowercase string."""
+        if hasattr(gender, 'value'):
+            return gender.value.lower()
+        return str(gender).lower()
+    
+    def _ensure_uint8(self, image: np.ndarray) -> np.ndarray:
+        """Ensure image is in uint8 format for OpenCV compatibility."""
+        if image.dtype != np.uint8:
+            if image.max() <= 1.0:
+                # Image is in [0, 1] range, convert to [0, 255]
+                return (image * 255).astype(np.uint8)
+            else:
+                # Image might be in [0, 255] but wrong dtype
+                return np.clip(image, 0, 255).astype(np.uint8)
+        return image
+    
     def _enhance_image_quality(self, image: np.ndarray) -> np.ndarray:
         """Apply advanced image enhancement techniques."""
         try:
+            # Ensure input is uint8 first
+            image = self._ensure_uint8(image)
+            
             # Convert to RGB if needed
             if len(image.shape) == 3 and image.shape[2] == 3:
                 enhanced = image.copy()
@@ -173,6 +204,10 @@ class BodyCompositionAnalyzer:
             if self.calibration_factors['lens_distortion_correction']:
                 enhanced = self._correct_lens_distortion(enhanced)
             
+            # Ensure final output is uint8 for OpenCV compatibility
+            if enhanced.dtype != np.uint8:
+                enhanced = (enhanced * 255).astype(np.uint8) if enhanced.max() <= 1.0 else enhanced.astype(np.uint8)
+            
             return enhanced
             
         except Exception as e:
@@ -182,6 +217,7 @@ class BodyCompositionAnalyzer:
     def _assess_image_quality(self, image: np.ndarray) -> float:
         """Assess overall image quality using multiple metrics."""
         try:
+            image = self._ensure_uint8(image)
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             
             # Sharpness (Laplacian variance)
@@ -220,6 +256,7 @@ class BodyCompositionAnalyzer:
         enhanced = self.denoising_filters['non_local_means'](enhanced)
         
         # Histogram equalization
+        enhanced = self._ensure_uint8(enhanced)
         lab = cv2.cvtColor(enhanced, cv2.COLOR_RGB2LAB)
         lab[:, :, 0] = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(lab[:, :, 0])
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
@@ -231,6 +268,10 @@ class BodyCompositionAnalyzer:
         # Gamma correction
         gamma = self._estimate_optimal_gamma(enhanced)
         enhanced = exposure.adjust_gamma(enhanced, gamma)
+        
+        # Ensure output is uint8
+        if enhanced.dtype != np.uint8:
+            enhanced = (enhanced * 255).astype(np.uint8) if enhanced.max() <= 1.0 else enhanced.astype(np.uint8)
         
         return enhanced
     
@@ -247,6 +288,10 @@ class BodyCompositionAnalyzer:
         # Subtle sharpening
         enhanced = filters.unsharp_mask(enhanced, radius=1, amount=0.3)
         
+        # Ensure output is uint8
+        if enhanced.dtype != np.uint8:
+            enhanced = (enhanced * 255).astype(np.uint8) if enhanced.max() <= 1.0 else enhanced.astype(np.uint8)
+        
         return enhanced
     
     def _apply_light_enhancement(self, image: np.ndarray) -> np.ndarray:
@@ -260,10 +305,15 @@ class BodyCompositionAnalyzer:
         if self._assess_image_quality(enhanced) < 0.8:
             enhanced = filters.unsharp_mask(enhanced, radius=0.5, amount=0.1)
         
+        # Ensure output is uint8
+        if enhanced.dtype != np.uint8:
+            enhanced = (enhanced * 255).astype(np.uint8) if enhanced.max() <= 1.0 else enhanced.astype(np.uint8)
+        
         return enhanced
     
     def _estimate_optimal_gamma(self, image: np.ndarray) -> float:
         """Estimate optimal gamma correction value."""
+        image = self._ensure_uint8(image)
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         mean_brightness = np.mean(gray) / 255.0
         
@@ -439,11 +489,19 @@ class BodyCompositionAnalyzer:
             logger.error(f"Error in ensemble prediction: {e}")
             return 0.0
     
-    def analyze_image(self, image_path: str, user_id: str, 
+    def analyze_image(self, image_data, user_id: str = None, 
                      physical_measurements: Dict[str, float] = None,
                      user_profile: Dict[str, Any] = None,
                      additional_images: Dict[str, str] = None) -> Dict[str, Any]:
-        """Analyze body composition from image(s) with enhanced computer vision."""
+        """Analyze body composition from image(s) with enhanced computer vision.
+        
+        Args:
+            image_data: Can be either a file path (str) or image bytes data
+            user_id: User identifier (optional)
+            physical_measurements: Additional physical measurements
+            user_profile: User profile information
+            additional_images: Additional images for multi-view analysis
+        """
         if not ANALYSIS_AVAILABLE:
             return {
                 "error": "Analysis libraries not available",
@@ -451,15 +509,30 @@ class BodyCompositionAnalyzer:
             }
             
         try:
-            # Load and preprocess image
-            image = cv2.imread(image_path)
-            if image is None:
-                raise ValueError(f"Cannot load image: {image_path}")
+            # Handle both file path and bytes data
+            if isinstance(image_data, str):
+                # File path provided
+                image = cv2.imread(image_data)
+                if image is None:
+                    raise ValueError(f"Cannot load image: {image_data}")
+                image_path = image_data
+            else:
+                # Bytes data provided
+                import numpy as np
+                # Convert bytes to numpy array
+                nparr = np.frombuffer(image_data, np.uint8)
+                # Decode image from bytes
+                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if image is None:
+                    raise ValueError("Cannot decode image from bytes data")
+                # Use a default path for processing
+                image_path = f"uploaded_image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
             
             # Apply enhanced image preprocessing
             enhanced_image = self._enhance_image_quality(image)
             
-            # Convert to RGB for MediaPipe
+            # Convert to RGB for MediaPipe (ensure uint8 first)
+            enhanced_image = self._ensure_uint8(enhanced_image)
             image_rgb = cv2.cvtColor(enhanced_image, cv2.COLOR_BGR2RGB)
             
             # Multi-model pose detection for better accuracy
@@ -491,13 +564,14 @@ class BodyCompositionAnalyzer:
             )
             
             # Create analysis record
+            user_id_str = user_id or "anonymous_user"
             analysis_id = hashlib.md5(
-                f"{user_id}_{datetime.now()}_{image_path}".encode()
+                f"{user_id_str}_{datetime.now()}_{image_path}".encode()
             ).hexdigest()
             
             composition_analysis = BodyCompositionAnalysis(
                 analysis_id=analysis_id,
-                user_id=user_id,
+                user_id=user_id_str,
                 image_path=image_path,
                 analysis_date=datetime.now(),
                 body_fat_percentage=analysis_results["body_fat_percentage"],
@@ -541,14 +615,14 @@ class BodyCompositionAnalyzer:
             # Try with the heavy model first
             results = self.pose_models['heavy'].process(image)
             if results.pose_landmarks:
-                confidence = np.mean([lm.visibility for lm in results.pose_landmarks.landmark])
+                confidence = np.mean([_safe_visibility(lm) for lm in results.pose_landmarks.landmark])
                 if confidence > 0.7:
                     return results
             
             # Try with full model for better accuracy
             results = self.pose_models['full'].process(image)
             if results.pose_landmarks:
-                confidence = np.mean([lm.visibility for lm in results.pose_landmarks.landmark])
+                confidence = np.mean([_safe_visibility(lm) for lm in results.pose_landmarks.landmark])
                 if confidence > 0.6:
                     return results
             
@@ -628,7 +702,7 @@ class BodyCompositionAnalyzer:
                         )
                         additional_analysis[view_type] = {
                             'measurements': measurements,
-                            'confidence': np.mean([lm.visibility for lm in pose_results.pose_landmarks.landmark])
+                            'confidence': np.mean([_safe_visibility(lm) for lm in pose_results.pose_landmarks.landmark])
                         }
                         
             except Exception as e:
@@ -722,7 +796,7 @@ class BodyCompositionAnalyzer:
             },
             "quality_metrics": {
                 "image_quality": self._assess_image_quality(image),
-                "pose_detection_confidence": np.mean([lm.visibility for lm in landmarks]),
+                "pose_detection_confidence": np.mean([_safe_visibility(lm) for lm in landmarks]),
                 "measurement_accuracy": self._estimate_measurement_accuracy(measurements, landmarks),
                 "multi_view_available": len(additional_analysis) > 0 if additional_analysis else False
             }
@@ -967,7 +1041,7 @@ class BodyCompositionAnalyzer:
             combined_body_fat = (body_fat_ml * ml_weight + body_fat_traditional * traditional_weight)
             
             # Apply bounds based on gender and age
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 return max(3.0, min(35.0, combined_body_fat))
             else:
                 return max(8.0, min(45.0, combined_body_fat))
@@ -1000,7 +1074,7 @@ class BodyCompositionAnalyzer:
             combined_muscle_mass = (muscle_mass_ml * ml_weight + muscle_mass_traditional * traditional_weight)
             
             # Apply physiological bounds
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 return max(25.0, min(60.0, combined_muscle_mass))
             else:
                 return max(20.0, min(50.0, combined_muscle_mass))
@@ -1034,7 +1108,8 @@ class BodyCompositionAnalyzer:
             age_normalized = (age - 30) / 50  # Normalize around middle age
             
             # Gender encoding
-            gender_factor = 1 if gender.lower() in ['male', 'm'] else 0
+            gender_str = self._normalize_gender(gender)
+            gender_factor = 1 if gender_str in ['male', 'm'] else 0
             
             # Body symmetry (simplified - would be calculated from CV in production)
             body_symmetry = 0.95
@@ -1298,6 +1373,9 @@ class BodyCompositionAnalyzer:
         except Exception as e:
             logger.error(f"Error analyzing skin texture: {e}")
             return 0.5
+    
+    def _calculate_body_fat_enhanced(self, measurements: Dict[str, float], age: int,
+                                   gender: str, weight_kg: float, height_cm: float) -> float:
         """Calculate body fat using enhanced anthropometric methods."""
         try:
             # Get measurements with defaults
@@ -1314,7 +1392,7 @@ class BodyCompositionAnalyzer:
                 hip_cm = hip_cm * 0.1
             
             # Navy Method (most accurate for general population)
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 # Men: 495/(1.0324-0.19077*log10(waist-neck)+0.15456*log10(height))-450
                 body_fat_navy = 495 / (1.0324 - 0.19077 * np.log10(waist_cm - neck_cm) + 
                                      0.15456 * np.log10(height_cm)) - 450
@@ -1327,7 +1405,7 @@ class BodyCompositionAnalyzer:
             bmi = weight_kg / ((height_cm / 100) ** 2)
             waist_to_height = waist_cm / height_cm
             
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 # Approximation based on waist-to-height ratio and BMI
                 body_fat_jp = (1.20 * bmi) + (0.23 * age) - (10.8 * 1) - 5.4  # 1 for male
                 # Adjust based on waist-to-height ratio
@@ -1337,7 +1415,7 @@ class BodyCompositionAnalyzer:
                 body_fat_jp += (waist_to_height - 0.49) * 45  # Different threshold for women
             
             # Deurenberg formula (BMI and age based)
-            body_fat_deur = (1.2 * bmi) + (0.23 * age) - (10.8 * (1 if gender.lower() in ['male', 'm'] else 0)) - 5.4
+            body_fat_deur = (1.2 * bmi) + (0.23 * age) - (10.8 * (1 if self._normalize_gender(gender) in ['male', 'm'] else 0)) - 5.4
             
             # Combine methods with weights based on reliability
             navy_weight = 0.5 if abs(body_fat_navy) < 50 else 0.1  # Navy method most reliable
@@ -1359,7 +1437,7 @@ class BodyCompositionAnalyzer:
             logger.error(f"Error calculating enhanced body fat: {e}")
             # Fall back to simple BMI-based estimation
             bmi = weight_kg / ((height_cm / 100) ** 2)
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 return max(5, min(35, (1.2 * bmi) + (0.23 * age) - 16.2))
             else:
                 return max(5, min(45, (1.2 * bmi) + (0.23 * age) - 5.4))
@@ -1390,7 +1468,7 @@ class BodyCompositionAnalyzer:
                 thigh_circumference *= 0.1
             
             # Modified Lee equation
-            gender_factor = 2.3 if gender.lower() in ['male', 'm'] else -2.3
+            gender_factor = 2.3 if self._normalize_gender(gender) in ['male', 'm'] else -2.3
             
             skeletal_muscle_kg = (
                 (height_cm ** 2) / resistance_factor +
@@ -1424,7 +1502,7 @@ class BodyCompositionAnalyzer:
             muscle_percentage = (muscle_mass_kg / weight_kg) * 100
             
             # Apply physiological bounds
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 return max(25.0, min(55.0, muscle_percentage))
             else:
                 return max(20.0, min(45.0, muscle_percentage))
@@ -1435,7 +1513,7 @@ class BodyCompositionAnalyzer:
             fat_free_mass = weight_kg * (1 - body_fat_percentage / 100)
             muscle_percentage = (fat_free_mass * 0.45 / weight_kg) * 100
             
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 return max(25.0, min(55.0, muscle_percentage))
             else:
                 return max(20.0, min(45.0, muscle_percentage))
@@ -1495,7 +1573,7 @@ class BodyCompositionAnalyzer:
             
             # Waist circumference thresholds
             waist_risk = 0
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 if waist_cm > 102:  # High risk
                     waist_risk = 10
                 elif waist_cm > 94:  # Medium risk
@@ -1529,13 +1607,13 @@ class BodyCompositionAnalyzer:
             bmr_katch = 370 + (21.6 * lean_mass_kg)
             
             # Mifflin-St Jeor Equation
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 bmr_mifflin = 88.362 + (13.397 * weight_kg) + (4.799 * height_cm) - (5.677 * age)
             else:
                 bmr_mifflin = 447.593 + (9.247 * weight_kg) + (3.098 * height_cm) - (4.330 * age)
             
             # Harris-Benedict Equation (revised)
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 bmr_harris = 88.362 + (13.397 * weight_kg) + (4.799 * height_cm) - (5.677 * age)
             else:
                 bmr_harris = 447.593 + (9.247 * weight_kg) + (3.098 * height_cm) - (4.330 * age)
@@ -1548,7 +1626,7 @@ class BodyCompositionAnalyzer:
         except Exception as e:
             logger.error(f"Error calculating enhanced BMR: {e}")
             # Fall back to simple Mifflin-St Jeor
-            if gender.lower() in ['male', 'm']:
+            if self._normalize_gender(gender) in ['male', 'm']:
                 bmr = 88.362 + (13.397 * weight_kg) + (4.799 * height_cm) - (5.677 * age)
             else:
                 bmr = 447.593 + (9.247 * weight_kg) + (3.098 * height_cm) - (4.330 * age)
@@ -1657,7 +1735,18 @@ class BodyCompositionAnalyzer:
         """Enhanced muscle definition calculation."""
         try:
             # Combine visibility with measurement ratios
-            visibility_scores = [landmarks[i].visibility for i in landmark_indices]
+            visibility_scores = []
+            for i in landmark_indices:
+                try:
+                    visibility = landmarks[i].visibility
+                    # Handle potential string values by converting to float
+                    if isinstance(visibility, str):
+                        visibility = float(visibility)
+                    visibility_scores.append(visibility)
+                except (ValueError, TypeError, AttributeError):
+                    # Use default visibility if conversion fails
+                    visibility_scores.append(0.5)
+            
             avg_visibility = np.mean(visibility_scores)
             
             # Use body fat percentage to adjust muscle definition
@@ -1719,7 +1808,7 @@ class BodyCompositionAnalyzer:
                                               physical_measurements: Dict[str, float] = None) -> float:
         """Enhanced confidence calculation considering physical measurements."""
         # Base confidence on landmark visibility and image quality
-        visibility_scores = [landmark.visibility for landmark in landmarks]
+        visibility_scores = [_safe_visibility(landmark) for landmark in landmarks]
         avg_visibility = np.mean(visibility_scores)
         
         # Image quality assessment
@@ -1898,7 +1987,18 @@ class BodyCompositionAnalyzer:
                                    landmarks) -> float:
         """Calculate muscle definition score (0-1)."""
         # Simplified muscle definition based on landmark visibility
-        visibility_scores = [landmarks[i].visibility for i in landmark_indices]
+        visibility_scores = []
+        for i in landmark_indices:
+            try:
+                visibility = landmarks[i].visibility
+                # Handle potential string values by converting to float
+                if isinstance(visibility, str):
+                    visibility = float(visibility)
+                visibility_scores.append(visibility)
+            except (ValueError, TypeError, AttributeError):
+                # Use default visibility if conversion fails
+                visibility_scores.append(0.5)
+        
         return np.mean(visibility_scores)
     
     def _calculate_fat_distribution(self, landmark_indices: List[int], 
@@ -1915,7 +2015,7 @@ class BodyCompositionAnalyzer:
     def _calculate_analysis_confidence(self, landmarks, image: np.ndarray) -> float:
         """Calculate confidence score for the analysis."""
         # Base confidence on landmark visibility and image quality
-        visibility_scores = [landmark.visibility for landmark in landmarks]
+        visibility_scores = [_safe_visibility(landmark) for landmark in landmarks]
         avg_visibility = np.mean(visibility_scores)
         
         # Image quality assessment (simplified)
@@ -2093,7 +2193,7 @@ class BodyCompositionAnalyzer:
         """Estimate accuracy of extracted measurements."""
         try:
             # Base accuracy on landmark visibility
-            visibility_scores = [lm.visibility for lm in landmarks]
+            visibility_scores = [_safe_visibility(lm) for lm in landmarks]
             avg_visibility = np.mean(visibility_scores)
             
             # Check measurement consistency
@@ -2129,7 +2229,7 @@ class BodyCompositionAnalyzer:
         """Comprehensive confidence calculation with multiple factors."""
         try:
             # Base confidence components
-            visibility_scores = [landmark.visibility for landmark in landmarks]
+            visibility_scores = [_safe_visibility(landmark) for landmark in landmarks]
             avg_visibility = np.mean(visibility_scores)
             
             # Image quality
@@ -2152,7 +2252,18 @@ class BodyCompositionAnalyzer:
             
             # Pose completeness (how many key landmarks are visible)
             key_landmarks = [0, 11, 12, 23, 24, 15, 16, 27, 28]  # Critical landmarks
-            visible_key_landmarks = sum(1 for idx in key_landmarks if landmarks[idx].visibility > 0.5)
+            visible_key_landmarks = 0
+            for idx in key_landmarks:
+                try:
+                    visibility = landmarks[idx].visibility
+                    # Handle potential string values by converting to float
+                    if isinstance(visibility, str):
+                        visibility = float(visibility)
+                    if visibility > 0.5:
+                        visible_key_landmarks += 1
+                except (ValueError, TypeError, AttributeError):
+                    # Skip landmarks with invalid visibility values
+                    continue
             pose_completeness = visible_key_landmarks / len(key_landmarks)
             
             # Combine all factors

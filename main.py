@@ -532,8 +532,15 @@ class APTFitnessApp:
                         return
                     
                     analysis_result = self.body_analyzer.analyze_image(
-                        file_bytes, 
-                        measurement_data
+                        file_bytes,
+                        user_id=getattr(st.session_state.user_profile, 'user_id', 'default_user'),
+                        physical_measurements=measurement_data,
+                        user_profile={
+                            'age': getattr(st.session_state.user_profile, 'age', 30),
+                            'gender': getattr(st.session_state.user_profile, 'gender', 'male'),
+                            'weight_kg': measurement_data.get('weight', 70),
+                            'height_cm': measurement_data.get('height', 170)
+                        }
                     )
                 else:
                     # Fallback analysis
@@ -549,7 +556,19 @@ class APTFitnessApp:
                     st.subheader("📊 Analysis Results")
                     if isinstance(analysis_result, dict):
                         for key, value in analysis_result.items():
-                            st.metric(key.replace('_', ' ').title(), value)
+                            # Only display values that are suitable for st.metric (primitives)
+                            if isinstance(value, (int, float, str)) and not isinstance(value, dict):
+                                # Convert value to string if it's not already
+                                display_value = str(value)
+                                st.metric(key.replace('_', ' ').title(), display_value)
+                            elif isinstance(value, dict):
+                                # For dictionary values, display as expandable section
+                                with st.expander(f"📋 {key.replace('_', ' ').title()}"):
+                                    for sub_key, sub_value in value.items():
+                                        st.write(f"**{sub_key.replace('_', ' ').title()}:** {sub_value}")
+                            else:
+                                # For other complex types, just display as text
+                                st.write(f"**{key.replace('_', ' ').title()}:** {value}")
                     else:
                         st.write(analysis_result)
                 
