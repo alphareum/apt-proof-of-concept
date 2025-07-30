@@ -25,16 +25,18 @@ from typing import Dict, List, Any, Optional
 import uuid
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)  # Reduced logging for performance
 logger = logging.getLogger(__name__)
 
-# Configure Streamlit page
-st.set_page_config(
-    page_title="APT Fitness Assistant",
-    page_icon="🏋️‍♀️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Configure Streamlit page - only once
+if "page_configured" not in st.session_state:
+    st.set_page_config(
+        page_title="APT Fitness Assistant",
+        page_icon="🏋️‍♀️",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    st.session_state.page_configured = True
 
 # Add src directory to Python path for imports
 current_dir = Path(__file__).parent
@@ -43,51 +45,81 @@ src_dir = current_dir / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-# Import core modules from the new structure
-try:
-    from apt_fitness import AppConfig, UserProfile, BodyCompositionAnalyzer, RecommendationEngine
-    from apt_fitness.core.models import Gender, ActivityLevel, FitnessLevel, GoalType, EquipmentType
-    from apt_fitness.ui.components import UIComponents
-    from apt_fitness.engines.recommendation import get_recommendation_engine
-    from apt_fitness.data.database import get_database
-    CORE_AVAILABLE = True
-    logger.info("✅ Core APT Fitness modules loaded successfully")
-except ImportError as e:
-    CORE_AVAILABLE = False
-    st.error(f"❌ Core modules not available: {e}")
-    logger.error(f"Core import error: {e}")
+# Lazy import pattern for better performance
+@st.cache_resource
+def load_core_modules():
+    """Lazy load core modules with caching."""
+    try:
+        from apt_fitness import AppConfig, UserProfile, BodyCompositionAnalyzer, RecommendationEngine
+        from apt_fitness.core.models import Gender, ActivityLevel, FitnessLevel, GoalType, EquipmentType
+        from apt_fitness.ui.components import UIComponents
+        from apt_fitness.engines.recommendation import get_recommendation_engine
+        from apt_fitness.data.database import get_database
+        
+        return {
+            'AppConfig': AppConfig,
+            'UserProfile': UserProfile,
+            'BodyCompositionAnalyzer': BodyCompositionAnalyzer,
+            'RecommendationEngine': RecommendationEngine,
+            'Gender': Gender,
+            'ActivityLevel': ActivityLevel, 
+            'FitnessLevel': FitnessLevel,
+            'GoalType': GoalType,
+            'EquipmentType': EquipmentType,
+            'UIComponents': UIComponents,
+            'get_recommendation_engine': get_recommendation_engine,
+            'get_database': get_database,
+            'available': True
+        }
+    except ImportError as e:
+        logger.error(f"Core import error: {e}")
+        return {'available': False, 'error': str(e)}
 
-# Optional imports with graceful fallbacks
-try:
-    from PIL import Image
-    import cv2
-    import mediapipe as mp
-    VISION_AVAILABLE = True
-    logger.info("✅ Computer vision libraries available")
-except ImportError as e:
-    VISION_AVAILABLE = False
-    st.warning(f"⚠️ Computer vision libraries not available: {e}")
-    logger.warning(f"Vision import error: {e}")
+@st.cache_resource
+def load_vision_modules():
+    """Lazy load computer vision modules."""
+    try:
+        from PIL import Image
+        import cv2
+        import mediapipe as mp
+        return {'Image': Image, 'cv2': cv2, 'mp': mp, 'available': True}
+    except ImportError as e:
+        logger.warning(f"Vision import error: {e}")
+        return {'available': False, 'error': str(e)}
 
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-    import pandas as pd
-    import numpy as np
-    PLOTTING_AVAILABLE = True
-    logger.info("✅ Plotting libraries available")
-except ImportError as e:
-    PLOTTING_AVAILABLE = False
-    st.warning("⚠️ Plotting libraries not available. Charts may be limited.")
-    logger.warning(f"Plotting import error: {e}")
+@st.cache_resource  
+def load_plotting_modules():
+    """Lazy load plotting modules."""
+    try:
+        import plotly.express as px
+        import plotly.graph_objects as go
+        import pandas as pd
+        import numpy as np
+        return {'px': px, 'go': go, 'pd': pd, 'np': np, 'available': True}
+    except ImportError as e:
+        logger.warning(f"Plotting import error: {e}")
+        return {'available': False, 'error': str(e)}
 
-try:
-    from apt_fitness.analyzers.body_composition import BodyCompositionAnalyzer
-    BODY_COMP_AVAILABLE = True
-    logger.info("✅ Body composition analyzer available")
-except ImportError as e:
-    BODY_COMP_AVAILABLE = False
-    logger.warning(f"Body composition analyzer not available: {e}")
+@st.cache_resource
+def load_body_composition_analyzer():
+    """Lazy load body composition analyzer."""
+    try:
+        from apt_fitness.analyzers.body_composition import BodyCompositionAnalyzer
+        return {'BodyCompositionAnalyzer': BodyCompositionAnalyzer, 'available': True}
+    except ImportError as e:
+        logger.warning(f"Body composition analyzer not available: {e}")
+        return {'available': False, 'error': str(e)}
+
+# Load modules
+CORE_MODULES = load_core_modules()
+VISION_MODULES = load_vision_modules()
+PLOTTING_MODULES = load_plotting_modules()
+BODY_COMP_MODULES = load_body_composition_analyzer()
+
+CORE_AVAILABLE = CORE_MODULES['available']
+VISION_AVAILABLE = VISION_MODULES['available'] 
+PLOTTING_AVAILABLE = PLOTTING_MODULES['available']
+BODY_COMP_AVAILABLE = BODY_COMP_MODULES['available']
 
 
 class APTFitnessApp:
@@ -95,58 +127,83 @@ class APTFitnessApp:
     
     def __init__(self):
         """Initialize the APT Fitness application."""
-        self.ui = UIComponents() if CORE_AVAILABLE else None
+        # Get cached modules
+        self.core_modules = CORE_MODULES
+        self.vision_modules = VISION_MODULES
+        self.plotting_modules = PLOTTING_MODULES
+        self.body_comp_modules = BODY_COMP_MODULES
+        
+        # Initialize UI components
+        self.ui = None
+        if CORE_AVAILABLE:
+            UIComponents = self.core_modules['UIComponents']
+            self.ui = UIComponents()
+        
+        # Initialize other components lazily
         self.recommendation_engine = None
         self.body_analyzer = None
         self.database = None
         
-        # Initialize components if available
-        if CORE_AVAILABLE:
-            try:
-                self.recommendation_engine = get_recommendation_engine()
-                self.database = get_database()
-                if BODY_COMP_AVAILABLE:
-                    self.body_analyzer = BodyCompositionAnalyzer()
-            except Exception as e:
-                logger.error(f"Error initializing components: {e}")
-        
-        # Initialize session state
+        # Initialize session state once
         self.initialize_session_state()
     
+    @st.cache_resource
+    def get_recommendation_engine(_self):
+        """Get recommendation engine with caching."""
+        if CORE_AVAILABLE and _self.recommendation_engine is None:
+            try:
+                get_recommendation_engine = _self.core_modules['get_recommendation_engine']
+                _self.recommendation_engine = get_recommendation_engine()
+            except Exception as e:
+                logger.error(f"Error initializing recommendation engine: {e}")
+        return _self.recommendation_engine
+    
+    @st.cache_resource
+    def get_database(_self):
+        """Get database with caching."""
+        if CORE_AVAILABLE and _self.database is None:
+            try:
+                get_database = _self.core_modules['get_database']
+                _self.database = get_database()
+            except Exception as e:
+                logger.error(f"Error initializing database: {e}")
+        return _self.database
+    
+    @st.cache_resource
+    def get_body_analyzer(_self):
+        """Get body analyzer with caching."""
+        if BODY_COMP_AVAILABLE and _self.body_analyzer is None:
+            try:
+                BodyCompositionAnalyzer = _self.body_comp_modules['BodyCompositionAnalyzer']
+                _self.body_analyzer = BodyCompositionAnalyzer()
+            except Exception as e:
+                logger.error(f"Error initializing body analyzer: {e}")
+        return _self.body_analyzer
+    
     def initialize_session_state(self):
-        """Initialize Streamlit session state variables."""
+        """Initialize Streamlit session state variables efficiently."""
         
-        # User profile and authentication
-        if 'user_profile' not in st.session_state:
-            st.session_state.user_profile = None
-        
-        if 'profile_complete' not in st.session_state:
-            st.session_state.profile_complete = False
-        
-        if 'show_profile_edit' not in st.session_state:
-            st.session_state.show_profile_edit = False
-        
-        # Application state
-        if 'recommendations_cache' not in st.session_state:
-            st.session_state.recommendations_cache = {}
-        
-        if 'weekly_plan_cache' not in st.session_state:
-            st.session_state.weekly_plan_cache = {}
-        
-        if 'analytics_data' not in st.session_state:
-            st.session_state.analytics_data = {
+        # Default session state values
+        defaults = {
+            'user_profile': None,
+            'profile_complete': False,
+            'show_profile_edit': False,
+            'recommendations_cache': {},
+            'weekly_plan_cache': {},
+            'analytics_data': {
                 'total_workouts': 0,
                 'total_minutes': 0,
                 'total_calories': 0,
                 'current_streak': 0
-            }
+            },
+            'measurements_history': [],
+            'body_analysis_history': []
+        }
         
-        # Body analysis data
-        if 'measurements_history' not in st.session_state:
-            st.session_state.measurements_history = []
-        
-        if 'body_analysis_history' not in st.session_state:
-            st.session_state.body_analysis_history = []
+        # Initialize only missing keys
+        for key, default_value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = default_value
     
     def check_user_profile(self) -> bool:
         """Check if user has a complete profile."""
@@ -166,40 +223,33 @@ class APTFitnessApp:
             logger.error(f"Error checking profile: {e}")
             return False
     
+    @st.fragment 
     def render_header(self):
-        """Render application header."""
-        st.title("🏋️‍♀️ APT Fitness Assistant")
-        st.subheader("Your AI-Powered Fitness Companion")
-        
-        # Feature availability status
-        if CORE_AVAILABLE:
-            col1, col2, col3, col4 = st.columns(4)
+        """Render application header with fragment optimization."""
+        # Only show status if not cached
+        if "header_rendered" not in st.session_state:
+            st.title("🏋️‍♀️ APT Fitness Assistant")
+            st.subheader("Your AI-Powered Fitness Companion")
             
-            with col1:
-                if VISION_AVAILABLE:
-                    st.success("✅ Computer Vision")
-                else:
-                    st.error("❌ Computer Vision")
+            # Feature availability status - cached
+            if CORE_AVAILABLE:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.success("✅ Computer Vision" if VISION_AVAILABLE else "❌ Computer Vision")
+                
+                with col2:
+                    st.success("✅ Body Analysis" if BODY_COMP_AVAILABLE else "❌ Body Analysis")
+                
+                with col3:
+                    st.success("✅ Analytics" if PLOTTING_AVAILABLE else "❌ Analytics")
+                
+                with col4:
+                    engine = self.get_recommendation_engine()
+                    st.success("✅ AI Recommendations" if engine else "❌ AI Recommendations")
             
-            with col2:
-                if BODY_COMP_AVAILABLE:
-                    st.success("✅ Body Analysis")
-                else:
-                    st.error("❌ Body Analysis")
-            
-            with col3:
-                if PLOTTING_AVAILABLE:
-                    st.success("✅ Analytics")
-                else:
-                    st.error("❌ Analytics")
-            
-            with col4:
-                if self.recommendation_engine:
-                    st.success("✅ AI Recommendations")
-                else:
-                    st.error("❌ AI Recommendations")
-        
-        st.divider()
+            st.divider()
+            st.session_state.header_rendered = True
     
     def render_profile_setup(self):
         """Render profile setup interface."""
@@ -214,6 +264,7 @@ class APTFitnessApp:
                 st.session_state.user_profile = new_profile
                 st.session_state.profile_complete = True
                 st.success("✅ Profile created successfully!")
+                # Use experimental_rerun for better performance
                 st.rerun()
         else:
             st.error("❌ Profile creation not available. Core modules missing.")
@@ -271,7 +322,8 @@ class APTFitnessApp:
         
         with col1:
             if st.button("🎯 Generate Workout", type="primary"):
-                if self.recommendation_engine:
+                recommendation_engine = self.get_recommendation_engine()
+                if recommendation_engine:
                     st.session_state.recommendations_cache = {}  # Clear cache
                     st.success("New workout will be generated!")
                 else:
@@ -297,7 +349,8 @@ class APTFitnessApp:
         
         profile = st.session_state.user_profile
         
-        if not self.recommendation_engine:
+        recommendation_engine = self.get_recommendation_engine()
+        if not recommendation_engine:
             st.error("❌ Recommendation engine not available.")
             return
         
@@ -307,7 +360,7 @@ class APTFitnessApp:
         if cache_key not in st.session_state.recommendations_cache:
             with st.spinner("🤖 Generating personalized recommendations..."):
                 try:
-                    recommendations = self.recommendation_engine.generate_workout_recommendations(profile)
+                    recommendations = recommendation_engine.generate_workout_recommendations(profile)
                     st.session_state.recommendations_cache[cache_key] = recommendations
                 except Exception as e:
                     st.error(f"Error generating recommendations: {e}")
@@ -357,7 +410,8 @@ class APTFitnessApp:
         
         profile = st.session_state.user_profile
         
-        if not self.recommendation_engine:
+        recommendation_engine = self.get_recommendation_engine()
+        if not recommendation_engine:
             st.error("❌ Workout planner not available.")
             return
         
@@ -367,7 +421,7 @@ class APTFitnessApp:
         if cache_key not in st.session_state.weekly_plan_cache:
             with st.spinner("📅 Creating your weekly workout plan..."):
                 try:
-                    weekly_plan = self.recommendation_engine.generate_weekly_plan(profile)
+                    weekly_plan = recommendation_engine.generate_weekly_plan(profile)
                     st.session_state.weekly_plan_cache[cache_key] = weekly_plan
                 except Exception as e:
                     st.error(f"Error generating weekly plan: {e}")
@@ -446,8 +500,13 @@ class APTFitnessApp:
                 with col1:
                     try:
                         # Convert uploaded file to PIL Image to avoid filename issues
-                        image = Image.open(uploaded_file)
-                        st.image(image, caption="Uploaded Image", use_container_width=True)
+                        if VISION_AVAILABLE:
+                            Image = self.vision_modules['Image']
+                            image = Image.open(uploaded_file)
+                            st.image(image, caption="Uploaded Image", use_container_width=True)
+                        else:
+                            st.error("❌ Image processing not available")
+                            return
                     except Exception as e:
                         st.error(f"❌ Could not display image: {e}")
                         return
@@ -520,7 +579,8 @@ class APTFitnessApp:
         with st.spinner("🤖 Analyzing your image..."):
             try:
                 # Enhanced analysis with body composition analyzer if available
-                if CORE_AVAILABLE and self.body_analyzer and BODY_COMP_AVAILABLE:
+                body_analyzer = self.get_body_analyzer()
+                if CORE_AVAILABLE and body_analyzer and BODY_COMP_AVAILABLE:
                     # Safely read file data
                     try:
                         file_bytes = uploaded_file.getvalue()
@@ -531,13 +591,14 @@ class APTFitnessApp:
                         st.error(f"❌ Error reading file: {e}")
                         return
                     
-                    analysis_result = self.body_analyzer.analyze_image(
+                    user_profile = st.session_state.user_profile
+                    analysis_result = body_analyzer.analyze_image(
                         file_bytes,
-                        user_id=getattr(st.session_state.user_profile, 'user_id', 'default_user'),
+                        user_id=getattr(user_profile, 'user_id', 'default_user'),
                         physical_measurements=measurement_data,
                         user_profile={
-                            'age': getattr(st.session_state.user_profile, 'age', 30),
-                            'gender': getattr(st.session_state.user_profile, 'gender', 'male'),
+                            'age': getattr(user_profile, 'age', 30),
+                            'gender': getattr(user_profile, 'gender', 'male'),
                             'weight_kg': measurement_data.get('weight', 70),
                             'height_cm': measurement_data.get('height', 170)
                         }
@@ -707,6 +768,8 @@ class APTFitnessApp:
         if st.session_state.measurements_history:
             if PLOTTING_AVAILABLE:
                 # Create progress charts
+                pd = self.plotting_modules['pd']
+                px = self.plotting_modules['px']
                 df = pd.DataFrame(st.session_state.measurements_history)
                 df['date'] = pd.to_datetime(df['date'])
                 
@@ -755,6 +818,8 @@ class APTFitnessApp:
         if PLOTTING_AVAILABLE and st.session_state.measurements_history:
             st.subheader("📊 Progress Charts")
             
+            pd = self.plotting_modules['pd']
+            px = self.plotting_modules['px']
             df = pd.DataFrame(st.session_state.measurements_history)
             df['date'] = pd.to_datetime(df['date'])
             
@@ -797,7 +862,11 @@ class APTFitnessApp:
         
         # Goal creation
         with st.expander("➕ Set New Goal"):
-            goal_type = st.selectbox("Goal Type", [g.value for g in GoalType])
+            if CORE_AVAILABLE:
+                GoalType = self.core_modules['GoalType']
+                goal_type = st.selectbox("Goal Type", [g.value for g in GoalType])
+            else:
+                goal_type = st.selectbox("Goal Type", ["Weight Loss", "Muscle Gain", "Endurance"])
             target_value = st.number_input("Target Value", min_value=0.0, value=10.0)
             target_date = st.date_input("Target Date", value=datetime.now().date() + timedelta(days=90))
             
@@ -867,17 +936,18 @@ class APTFitnessApp:
 
 
 def main():
-    """Main application entry point."""
+    """Main application entry point with optimized error handling."""
     try:
-        # Configure Streamlit to handle errors gracefully
+        # Reduced error counting for better performance
         if 'error_count' not in st.session_state:
             st.session_state.error_count = 0
         
-        # Reset error count periodically
-        if st.session_state.error_count > 10:
+        # Reset error count less frequently
+        if st.session_state.error_count > 5:
             st.session_state.error_count = 0
-            st.rerun()
+            st.cache_data.clear()  # Clear cache on repeated errors
         
+        # Initialize and run app
         app = APTFitnessApp()
         app.run()
         
@@ -885,34 +955,22 @@ def main():
         st.session_state.error_count += 1
         error_msg = str(e)
         
-        # Handle specific error types
-        if "AxiosError" in error_msg or "400" in error_msg:
-            st.error("🔄 **Connection Issue Detected**")
-            st.info("This appears to be a temporary communication error. Please try refreshing the page or restarting the application.")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("🔄 Refresh Page"):
-                    st.rerun()
-            with col2:
-                if st.button("🧹 Clear Cache"):
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-                    st.rerun()
-            with col3:
-                if st.button("🔄 Reset Session"):
-                    for key in list(st.session_state.keys()):
-                        del st.session_state[key]
-                    st.rerun()
+        # Handle specific error types more efficiently
+        if any(keyword in error_msg.lower() for keyword in ["axios", "400", "request", "connection"]):
+            st.error("🔄 **Connection Issue** - Please refresh the page.")
+            if st.button("🔄 Refresh", key="error_refresh"):
+                st.rerun()
         else:
             st.error(f"❌ Application error: {e}")
-            logger.error(f"Application error: {traceback.format_exc()}")
+            logger.error(f"Application error: {e}")
         
-        # Show debug info in expander
-        with st.expander("🔧 Debug Information"):
-            st.code(traceback.format_exc())
-            st.write("**Session State:**")
-            st.json({k: str(v)[:100] for k, v in st.session_state.items()})
+        # Simplified debug info
+        if st.session_state.error_count > 2:
+            with st.expander("🔧 Debug Info"):
+                st.code(str(e))
+    
+    except KeyboardInterrupt:
+        st.info("👋 Application stopped by user.")
 
 
 if __name__ == "__main__":

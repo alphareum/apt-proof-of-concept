@@ -1,11 +1,12 @@
 [server]
 port = 8501
 headless = true
-maxUploadSize = 200
-maxMessageSize = 200
+maxUploadSize = 50  # Reduced from 200MB to 50MB for better performance
+maxMessageSize = 50  # Reduced message size
 enableCORS = false
 enableXsrfProtection = false
-runOnSave = true
+runOnSave = false  # Disabled auto-reload for performance
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
@@ -15,4 +16,22 @@ serverAddress = "localhost"
 base = "light"
 
 [logger]
-level = "info"
+level = "warning"  # Reduced logging level for performance
+
+[runner]
+magicEnabled = true
+installTracer = false
+fixMatplotlib = true
+postScriptGC = true  # Enable garbage collection after script
+fastReruns = true  # Enable fast reruns
+enforceSerializableSessionState = false  # Allow non-serializable objects for performance
+
+[client]
+caching = true
+displayEnabled = true
+toolbarMode = "auto"
+
+[global]
+developmentMode = false
+suppressDeprecationWarnings = true
+showWarningOnDirectExecution = false
