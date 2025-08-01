@@ -110,6 +110,18 @@ def load_body_composition_analyzer():
         logger.warning(f"Body composition analyzer not available: {e}")
         return {'available': False, 'error': str(e)}
 
+@st.cache_resource
+def get_cached_body_analyzer():
+    """Create and cache a single body analyzer instance."""
+    try:
+        if BODY_COMP_AVAILABLE:
+            BodyCompositionAnalyzer = BODY_COMP_MODULES['BodyCompositionAnalyzer']
+            return BodyCompositionAnalyzer()
+        return None
+    except Exception as e:
+        logger.error(f"Error creating cached body analyzer: {e}")
+        return None
+
 # Load modules
 CORE_MODULES = load_core_modules()
 VISION_MODULES = load_vision_modules()
@@ -172,13 +184,8 @@ class APTFitnessApp:
     @st.cache_resource
     def get_body_analyzer(_self):
         """Get body analyzer with caching."""
-        if BODY_COMP_AVAILABLE and _self.body_analyzer is None:
-            try:
-                BodyCompositionAnalyzer = _self.body_comp_modules['BodyCompositionAnalyzer']
-                _self.body_analyzer = BodyCompositionAnalyzer()
-            except Exception as e:
-                logger.error(f"Error initializing body analyzer: {e}")
-        return _self.body_analyzer
+        # Use the global cached instance instead of creating per-app instance
+        return get_cached_body_analyzer()
     
     def initialize_session_state(self):
         """Initialize Streamlit session state variables efficiently."""
@@ -950,6 +957,7 @@ def main():
         # Initialize and run app
         app = APTFitnessApp()
         app.run()
+
         
     except Exception as e:
         st.session_state.error_count += 1
