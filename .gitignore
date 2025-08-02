@@ -250,9 +250,6 @@ mlruns/
 .neptune/
 
 # Image and video files (if not needed for the project)
-*.jpg
-*.jpeg
-*.png
 *.gif
 *.bmp
 *.tiff
