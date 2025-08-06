@@ -14,23 +14,9 @@ This proof-of-concept showcases the integration of computer vision, pose detecti
 
 ## 🚀 Quick Start
 
-### ⚡ Fast Setup (Recommended)
-
-**One-command setup and run:**
-```bash
-python run.py --setup --run
-```
-
-**Or step by step:**
-```bash
-python run.py --setup     # Setup environment
-python run.py --run       # Run application
-```
-
-**Direct execution (auto-starts Streamlit):**
-```bash
-python main.py            # Automatically starts Streamlit server
-```
+**Dependencies and Running:**
+uv pip install -r requirements.txt
+uv run streamlit run main.py           # Automatically starts Streamlit server
 
 ### 🖱️ One-Click Setup (Windows)
 - **UV Setup**: Double-click `setup-uv.bat`
@@ -48,8 +34,7 @@ uv venv .venv
 uv pip install -r requirements.txt
 
 # Run application (any of these options)
-python main.py            # Auto-starts Streamlit
-streamlit run main.py     # Direct Streamlit command
+uv run streamlit run main.py     # Direct Streamlit command
 ```
 
 #### Traditional Python
@@ -59,9 +44,8 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 
-# Run application (any of these options)
-python main.py            # Auto-starts Streamlit
-streamlit run main.py     # Direct Streamlit command
+# Run application 
+uv run streamlit run main.py     # Direct Streamlit command
 ```
 
 ## 📋 Features
