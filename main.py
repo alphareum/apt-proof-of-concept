@@ -19,13 +19,14 @@ import sys
 import logging
 import streamlit as st
 import traceback
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-import uuid
+from io import BytesIO
 
 # Set up logging
-logging.basicConfig(level=logging.WARNING)  # Reduced logging for performance
+logging.basicConfig(level=logging.INFO)  # Changed to INFO to see debug messages
 logger = logging.getLogger(__name__)
 
 # Configure Streamlit page - only once
@@ -110,7 +111,7 @@ def load_body_composition_analyzer():
         logger.warning(f"Body composition analyzer not available: {e}")
         return {'available': False, 'error': str(e)}
 
-@st.cache_resource
+@st.cache_resource(ttl=300)  # Cache for 5 minutes only to allow updates
 def get_cached_body_analyzer():
     """Create and cache a single body analyzer instance."""
     try:
@@ -190,6 +191,15 @@ class APTFitnessApp:
     def initialize_session_state(self):
         """Initialize Streamlit session state variables efficiently."""
         
+        # Clean up any corrupted session state that might cause 400 errors
+        if hasattr(st.session_state, '_session_corrupted'):
+            for key in list(st.session_state.keys()):
+                if key.startswith('body_analysis') or key.startswith('recommendations'):
+                    try:
+                        del st.session_state[key]
+                    except:
+                        pass
+        
         # Default session state values
         defaults = {
             'user_profile': None,
@@ -211,6 +221,13 @@ class APTFitnessApp:
         for key, default_value in defaults.items():
             if key not in st.session_state:
                 st.session_state[key] = default_value
+                
+        # Limit history sizes to prevent memory issues that cause 400 errors
+        if len(st.session_state.get('body_analysis_history', [])) > 20:
+            st.session_state.body_analysis_history = st.session_state.body_analysis_history[-10:]
+            
+        if len(st.session_state.get('measurements_history', [])) > 50:
+            st.session_state.measurements_history = st.session_state.measurements_history[-25:]
     
     def check_user_profile(self) -> bool:
         """Check if user has a complete profile."""
@@ -486,22 +503,41 @@ class APTFitnessApp:
         st.subheader("📸 Upload Photo for Analysis")
         st.info("💡 **Tip:** Upload a clear, full-body photo in good lighting for best results")
         
-        # File uploader
+        # Debug option to clear analyzer cache
+        if st.checkbox("🔧 Force reload body analyzer (for debugging)", key="force_reload_analyzer"):
+            get_cached_body_analyzer.clear()
+            st.info("Body analyzer cache cleared - will use latest code")
+        
+        # File uploader with improved error handling
         uploaded_file = st.file_uploader(
             "Choose an image...",
             type=['jpg', 'jpeg', 'png'],
-            help="Upload a clear, full-body photo for analysis",
-            key="body_analysis_uploader"
+            help="Upload a clear, full-body photo for analysis (Max 10MB)",
+            key="body_analysis_uploader",
+            accept_multiple_files=False
         )
         
         if uploaded_file:
+            # Immediate validation to prevent 400 errors
             try:
-                # Validate file immediately
+                # Check file properties immediately
+                if not hasattr(uploaded_file, 'size') or uploaded_file.size is None:
+                    st.error("❌ Invalid file. Please try uploading again.")
+                    st.stop()
+                    
                 if uploaded_file.size > 10 * 1024 * 1024:  # 10MB limit
                     st.error("❌ File too large. Please upload an image smaller than 10MB.")
-                    return
-                
-                # Display the uploaded image
+                    st.stop()
+                    
+                if uploaded_file.size < 1024:  # Too small
+                    st.error("❌ File too small. Please upload a valid image.")
+                    st.stop()
+            except Exception as validation_error:
+                st.error(f"❌ File validation error: {validation_error}")
+                st.stop()
+            
+            try:
+                # Display the uploaded image with better error handling
                 col1, col2 = st.columns([1, 1])
                 
                 with col1:
@@ -509,14 +545,26 @@ class APTFitnessApp:
                         # Convert uploaded file to PIL Image to avoid filename issues
                         if VISION_AVAILABLE:
                             Image = self.vision_modules['Image']
-                            image = Image.open(uploaded_file)
+                            # Create a copy of the file data to avoid conflicts
+                            file_copy = uploaded_file.read()
+                            uploaded_file.seek(0)  # Reset for later use
+                            
+                            from io import BytesIO
+                            image = Image.open(BytesIO(file_copy))
+                            
+                            # Validate image format
+                            if image.format not in ['JPEG', 'PNG', 'JPG']:
+                                st.error("❌ Unsupported image format. Please use JPG or PNG.")
+                                st.stop()
+                                
                             st.image(image, caption="Uploaded Image", use_container_width=True)
                         else:
                             st.error("❌ Image processing not available")
-                            return
+                            st.stop()
                     except Exception as e:
                         st.error(f"❌ Could not display image: {e}")
-                        return
+                        st.info("💡 Try uploading a different image or refresh the page.")
+                        st.stop()
             
             except Exception as e:
                 st.error(f"❌ File processing error: {e}")
@@ -572,15 +620,34 @@ class APTFitnessApp:
                         st.write("**Measurements:**", analysis['measurements'])
     
     def process_image_analysis(self, uploaded_file, measurement_data):
-        """Process the uploaded image and measurement data."""
+        """Process the uploaded image and measurement data with improved error handling."""
         
-        # Validate file size and type
-        if uploaded_file.size > 10 * 1024 * 1024:  # 10MB limit
-            st.error("❌ File too large. Please upload an image smaller than 10MB.")
-            return
-        
-        if not uploaded_file.type.startswith('image/'):
-            st.error("❌ Invalid file type. Please upload an image file.")
+        # Enhanced validation with better error handling
+        try:
+            # Validate file size and type more thoroughly
+            if not uploaded_file:
+                st.error("❌ No file uploaded. Please select an image file.")
+                return
+                
+            if uploaded_file.size > 10 * 1024 * 1024:  # 10MB limit
+                st.error("❌ File too large. Please upload an image smaller than 10MB.")
+                return
+            
+            if uploaded_file.size < 1024:  # Too small file
+                st.error("❌ File too small. Please upload a valid image file.")
+                return
+            
+            if not uploaded_file.type or not uploaded_file.type.startswith('image/'):
+                st.error("❌ Invalid file type. Please upload a valid image file (JPG, PNG).")
+                return
+            
+            # Validate measurement data
+            if not isinstance(measurement_data, dict):
+                st.error("❌ Invalid measurement data. Please check your inputs.")
+                return
+                
+        except Exception as e:
+            st.error(f"❌ File validation error: {e}")
             return
         
         with st.spinner("🤖 Analyzing your image..."):
@@ -588,80 +655,160 @@ class APTFitnessApp:
                 # Enhanced analysis with body composition analyzer if available
                 body_analyzer = self.get_body_analyzer()
                 if CORE_AVAILABLE and body_analyzer and BODY_COMP_AVAILABLE:
-                    # Safely read file data
+                    # Safely read file data with better error handling
                     try:
-                        file_bytes = uploaded_file.getvalue()
-                        if len(file_bytes) == 0:
+                        # Reset file pointer to beginning
+                        uploaded_file.seek(0)
+                        file_bytes = uploaded_file.read()
+                        
+                        if not file_bytes or len(file_bytes) == 0:
                             st.error("❌ Empty file detected. Please upload a valid image.")
                             return
+                            
+                        # Validate it's actually an image by trying to open it
+                        if VISION_AVAILABLE:
+                            Image = self.vision_modules['Image']
+                            try:
+                                test_image = Image.open(uploaded_file)
+                                test_image.verify()  # Verify it's a valid image
+                                uploaded_file.seek(0)  # Reset after verification
+                                file_bytes = uploaded_file.read()
+                            except Exception as img_error:
+                                st.error(f"❌ Invalid image file: {img_error}")
+                                return
+                        
                     except Exception as e:
                         st.error(f"❌ Error reading file: {e}")
                         return
                     
+                    # Prepare user profile data more safely
                     user_profile = st.session_state.user_profile
-                    analysis_result = body_analyzer.analyze_image(
-                        file_bytes,
-                        user_id=getattr(user_profile, 'user_id', 'default_user'),
-                        physical_measurements=measurement_data,
-                        user_profile={
+                    user_profile_data = {}
+                    
+                    if user_profile:
+                        user_profile_data = {
                             'age': getattr(user_profile, 'age', 30),
-                            'gender': getattr(user_profile, 'gender', 'male'),
-                            'weight_kg': measurement_data.get('weight', 70),
-                            'height_cm': measurement_data.get('height', 170)
+                            'gender': str(getattr(user_profile, 'gender', 'male')),
+                            'weight_kg': float(measurement_data.get('weight', 70)),
+                            'height_cm': float(measurement_data.get('height', 170))
                         }
-                    )
+                    else:
+                        user_profile_data = {
+                            'age': 30,
+                            'gender': 'male',
+                            'weight_kg': float(measurement_data.get('weight', 70)),
+                            'height_cm': float(measurement_data.get('height', 170))
+                        }
+                    
+                    # Process with timeout and better error handling
+                    try:
+                        analysis_result = body_analyzer.analyze_image(
+                            file_bytes,
+                            user_id=getattr(user_profile, 'user_id', f'user_{uuid.uuid4().hex[:8]}'),
+                            physical_measurements=measurement_data,
+                            user_profile=user_profile_data
+                        )
+                    except Exception as analysis_error:
+                        st.error(f"❌ Analysis failed: {analysis_error}")
+                        # Fallback to basic analysis
+                        analysis_result = self.perform_basic_image_analysis(measurement_data)
+                        
                 else:
                     # Fallback analysis
                     analysis_result = self.perform_basic_image_analysis(measurement_data)
                 
-                # Display results
+                # Display results with better error handling
                 st.success("✅ Analysis completed!")
                 
-                # Results display
+                # Results display with improved validation
                 col1, col2 = st.columns(2)
                 
                 with col1:
                     st.subheader("📊 Analysis Results")
-                    if isinstance(analysis_result, dict):
-                        for key, value in analysis_result.items():
-                            # Only display values that are suitable for st.metric (primitives)
-                            if isinstance(value, (int, float, str)) and not isinstance(value, dict):
-                                # Convert value to string if it's not already
-                                display_value = str(value)
-                                st.metric(key.replace('_', ' ').title(), display_value)
-                            elif isinstance(value, dict):
-                                # For dictionary values, display as expandable section
-                                with st.expander(f"📋 {key.replace('_', ' ').title()}"):
-                                    for sub_key, sub_value in value.items():
-                                        st.write(f"**{sub_key.replace('_', ' ').title()}:** {sub_value}")
-                            else:
-                                # For other complex types, just display as text
-                                st.write(f"**{key.replace('_', ' ').title()}:** {value}")
-                    else:
-                        st.write(analysis_result)
+                    try:
+                        if isinstance(analysis_result, dict) and analysis_result:
+                            for key, value in analysis_result.items():
+                                if key in ['breakdown', 'quality_metrics', 'calculation_methods']:
+                                    continue  # Skip complex nested objects for main display
+                                    
+                                # Only display values that are suitable for st.metric (primitives)
+                                if isinstance(value, (int, float)):
+                                    # Format numeric values appropriately
+                                    if key.endswith('_percentage') or 'percentage' in key.lower():
+                                        display_value = f"{value:.1f}%"
+                                    elif key in ['bmr_estimated', 'visceral_fat_level']:
+                                        display_value = f"{value:.0f}"
+                                    else:
+                                        display_value = f"{value:.1f}"
+                                    st.metric(key.replace('_', ' ').title(), display_value)
+                                elif isinstance(value, str):
+                                    st.metric(key.replace('_', ' ').title(), value)
+                                elif isinstance(value, dict) and key in ['ratios', 'measurements']:
+                                    # For dictionary values, display as expandable section
+                                    with st.expander(f"📋 {key.replace('_', ' ').title()}"):
+                                        for sub_key, sub_value in value.items():
+                                            if isinstance(sub_value, (int, float)):
+                                                st.write(f"**{sub_key.replace('_', ' ').title()}:** {sub_value:.2f}")
+                                            else:
+                                                st.write(f"**{sub_key.replace('_', ' ').title()}:** {sub_value}")
+                        else:
+                            st.write("Basic analysis completed")
+                            if isinstance(analysis_result, dict):
+                                for key, value in analysis_result.items():
+                                    st.write(f"**{key}:** {value}")
+                    except Exception as display_error:
+                        st.warning(f"Could not display some results: {display_error}")
+                        st.write("Analysis completed but display formatting failed.")
                 
                 with col2:
                     st.subheader("💡 Recommendations")
-                    self.generate_image_based_recommendations(measurement_data, analysis_result)
+                    try:
+                        self.generate_image_based_recommendations(measurement_data, analysis_result)
+                    except Exception as rec_error:
+                        st.warning(f"Could not generate recommendations: {rec_error}")
+                        st.write("• Focus on maintaining a balanced diet")
+                        st.write("• Include regular cardiovascular exercise")
+                        st.write("• Add strength training to your routine")
                 
-                # Save to history with error handling
+                # Save to history with better error handling
                 try:
-                    st.session_state.body_analysis_history.append({
+                    history_entry = {
                         'date': datetime.now().isoformat(),
-                        'analysis': analysis_result,
+                        'analysis': str(analysis_result)[:500],  # Limit size to prevent issues
                         'measurements': measurement_data,
-                        'image_name': uploaded_file.name
-                    })
-                except Exception as e:
-                    logger.warning(f"Could not save to history: {e}")
+                        'image_name': getattr(uploaded_file, 'name', 'unknown.jpg')
+                    }
+                    st.session_state.body_analysis_history.append(history_entry)
+                    
+                    # Limit history size to prevent memory issues
+                    if len(st.session_state.body_analysis_history) > 10:
+                        st.session_state.body_analysis_history = st.session_state.body_analysis_history[-10:]
+                        
+                except Exception as save_error:
+                    logger.warning(f"Could not save to history: {save_error}")
                 
             except Exception as e:
                 error_msg = str(e)
-                if "400" in error_msg or "request" in error_msg.lower():
-                    st.error("🔄 **Connection error during analysis.** Please try again or refresh the page.")
+                if "400" in error_msg or "request" in error_msg.lower() or "axios" in error_msg.lower():
+                    st.error("🔄 **Connection error during analysis.** Please try:")
+                    st.write("1. Refresh the page")
+                    st.write("2. Upload a smaller image (< 5MB)")
+                    st.write("3. Try a different image format (JPG/PNG)")
+                    if st.button("🔄 Refresh Page", key="refresh_after_error"):
+                        st.rerun()
                 else:
                     st.error(f"❌ Analysis error: {e}")
                 logger.error(f"Image analysis error: {e}")
+                
+                # Provide fallback basic analysis
+                st.info("Falling back to basic analysis...")
+                try:
+                    basic_result = self.perform_basic_image_analysis(measurement_data)
+                    st.subheader("📊 Basic Analysis Results")
+                    for key, value in basic_result.items():
+                        st.write(f"**{key}:** {value}")
+                except Exception as fallback_error:
+                    st.error(f"Even basic analysis failed: {fallback_error}")
     
     def perform_basic_image_analysis(self, measurement_data):
         """Perform basic analysis when advanced CV is not available."""
@@ -895,6 +1042,12 @@ class APTFitnessApp:
     def run(self):
         """Run the main application."""
         
+        # Clear caches to ensure latest code is used
+        if st.button("🔄 Refresh App & Clear Cache", key="refresh_app_cache"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
+        
         # Render header
         self.render_header()
         
@@ -943,16 +1096,26 @@ class APTFitnessApp:
 
 
 def main():
-    """Main application entry point with optimized error handling."""
+    """Main application entry point with enhanced error handling for 400 errors."""
     try:
-        # Reduced error counting for better performance
+        # Enhanced error counting for better stability
         if 'error_count' not in st.session_state:
             st.session_state.error_count = 0
         
-        # Reset error count less frequently
-        if st.session_state.error_count > 5:
+        # Reset on excessive errors to prevent cascading failures
+        if st.session_state.error_count > 3:
             st.session_state.error_count = 0
-            st.cache_data.clear()  # Clear cache on repeated errors
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            # Clear potentially corrupted session state
+            corrupted_keys = [key for key in st.session_state.keys() 
+                            if 'cache' in key or 'history' in key or 'upload' in key]
+            for key in corrupted_keys:
+                try:
+                    del st.session_state[key]
+                except:
+                    pass
+            st.session_state._session_corrupted = True
         
         # Initialize and run app
         app = APTFitnessApp()
@@ -961,21 +1124,60 @@ def main():
         
     except Exception as e:
         st.session_state.error_count += 1
-        error_msg = str(e)
+        error_msg = str(e).lower()
         
-        # Handle specific error types more efficiently
-        if any(keyword in error_msg.lower() for keyword in ["axios", "400", "request", "connection"]):
-            st.error("🔄 **Connection Issue** - Please refresh the page.")
-            if st.button("🔄 Refresh", key="error_refresh"):
+        # Enhanced error handling for different types
+        if any(keyword in error_msg for keyword in ["axios", "400", "request", "connection", "bad request"]):
+            st.error("🔄 **Connection Issue Detected**")
+            st.write("This usually happens with large file uploads or network issues.")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("🔄 Refresh Page", key="error_refresh"):
+                    st.cache_data.clear()
+                    st.rerun()
+            with col2:
+                if st.button("🧹 Clear Cache", key="clear_cache"):
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                    st.session_state.clear()
+                    st.rerun()
+            with col3:
+                if st.button("🔄 Restart App", key="restart_app"):
+                    # Force complete restart
+                    for key in list(st.session_state.keys()):
+                        try:
+                            del st.session_state[key]
+                        except:
+                            pass
+                    st.rerun()
+                    
+            st.info("💡 **Tips to avoid this error:**")
+            st.write("• Use smaller images (< 5MB)")
+            st.write("• Try JPG format instead of PNG")
+            st.write("• Ensure stable internet connection")
+            st.write("• Close other browser tabs if using a lot of memory")
+            
+        elif "memory" in error_msg or "size" in error_msg:
+            st.error("💾 **Memory Issue** - Try using smaller files or refreshing the page.")
+            if st.button("🔄 Clear Memory & Refresh", key="memory_refresh"):
+                st.cache_data.clear()
+                st.cache_resource.clear()
                 st.rerun()
         else:
             st.error(f"❌ Application error: {e}")
             logger.error(f"Application error: {e}")
+            
+            # Provide recovery options
+            if st.button("🔄 Try Again", key="generic_refresh"):
+                st.rerun()
         
-        # Simplified debug info
+        # Show debug info only after multiple errors
         if st.session_state.error_count > 2:
-            with st.expander("🔧 Debug Info"):
-                st.code(str(e))
+            with st.expander("🔧 Technical Details"):
+                st.code(f"Error: {e}")
+                st.code(f"Type: {type(e).__name__}")
+                st.write(f"Error count: {st.session_state.error_count}")
     
     except KeyboardInterrupt:
         st.info("👋 Application stopped by user.")

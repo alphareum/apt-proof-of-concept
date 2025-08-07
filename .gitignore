@@ -323,3 +323,7 @@ fitness_venv/*
 
 # UV specific
 uv.lock
+
+# temp files
+processed_images/
+temp_files/
